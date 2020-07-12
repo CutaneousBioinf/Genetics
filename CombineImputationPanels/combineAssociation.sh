@@ -1,7 +1,7 @@
 #!/bin/bash
 MARKER_PATH=..
 ASSOC_PATH=..
-COHORTS="Cohort1 Cohort 2"
+COHORTS="Cohort1 Cohort2"
 
 panelMarkers(){
 CHR=$1; PANEL=$2; COHORT=$3
