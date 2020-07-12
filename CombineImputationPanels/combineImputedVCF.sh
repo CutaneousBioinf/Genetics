@@ -16,3 +16,4 @@ tabix -pvcf ${VCF_PATH}/${COHORT}/merged/${COHORT}_chr${CHR}.shapeIT2.minimac3_m
 for COHORT in $COHORTS; do
 for CHR in $(seq 22); do
 combineVCF ${COHORT} ${CHR}
+done; done
