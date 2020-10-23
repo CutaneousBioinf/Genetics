@@ -205,25 +205,71 @@ int create_cpa_table(const char *source_name, const char* rsid_table_name) {
 			max_content_length = stored_data.length();
 		}
 		if (stored_data.length() > MAX_BIG_DATA_LENGTH) {
-			cout << stored_data << endl;
 			cout << "ERROR: Maximum length exceeded, encountered string of length " << stored_data.length() << endl;
-			return 1;
+			continue;
 		}
-		char stored_arr[MAX_DATA_LENGTH] = {};
-		strcpy(stored_arr, stored_data.c_str());
-		strcpy(item.data, stored_arr);
+		string b_key = "";
+		if (is_snp(alleles)) {
+			char stored_arr[MAX_DATA_LENGTH] = {};
+			strcpy(stored_arr, stored_data.c_str());
+			strcpy(item.data, stored_arr);
+			b_key = "sc" + chromosome_key + "_" + startpos;
+		}
+		if (b_key != "") {
+			cout << "adding " << b_key << "_" << count_other_members_big(&ht, b_key) << "..." << endl;
+			cout << file.tellg() << endl;
+			const bool inserted = ht.insert((b_key + "_" + to_string(count_other_members_big(&ht, b_key))).c_str(), item);
+			if (!inserted) {
+				cout << "[already in table]" << endl;
+			}
+		}
+	}
+	file.close();
+	cout << "Max RSID length (excluding rs): " << max_rsid_length << endl;
+	cout << "Max content length: " << max_content_length << endl;
+	return 0;
+}
+
+int create_cpa_table_pointer(const char *source_name, const char* rsid_table_name) {
+	DiskHash<size_t> ht(rsid_table_name, key_maxlen_big, dht::DHOpenRW);
+	string line;
+	ifstream file;
+	file.open(string(source_name));
+	if (!file.is_open()) {
+		cout << "Source file could not be opened" << endl;
+		return 1;
+	}
+	int max_rsid_length = 0;
+	int max_content_length = 0;
+	size_t prev_pos = file.tellg();
+	while (std::getline(file, line)) {
+		vector<string> tsv = str_split(line, '\t');
+		string chromosome = tsv[chromosome_col];
+		string chromosome_key = chromosome_to_key(chromosome);
+		string startpos = tsv[startpos_col];
+		string rsid_str = tsv[rsid_col];
+		if (rsid_str.length() - 2 > max_rsid_length) {
+			max_rsid_length = rsid_str.length() - 2;
+		}
+		string ref_allele = tsv[ref_allele_col];
+		string alleles = tsv[alleles_col];
+		string rsid_num = rsid_str.substr(2, rsid_str.length());
+		if (stored_data.length() > max_content_length) {
+			max_content_length = stored_data.length();
+		}
 		string b_key = "";
 		if (is_snp(alleles)) {
 			b_key = "sc" + chromosome_key + "_" + startpos;
 		}
 		if (b_key != "") {
 			cout << "adding " << b_key << "_" << count_other_members_big(&ht, b_key) << "..." << endl;
-			cout << stored_data << endl;
-			const bool inserted = ht.insert((b_key + "_" + to_string(count_other_members_big(&ht, b_key))).c_str(), item);
+			cout << file.tellg() << endl;
+			const bool inserted = ht.insert((b_key + "_" + to_string(count_other_members_big(&ht, b_key))).c_str(), prev_pos);
 			if (!inserted) {
 				cout << "[already in table]" << endl;
 			}
 		}
+		prev_pos = file.tellg();
 	}
 	file.close();
 	cout << "Max RSID length (excluding rs): " << max_rsid_length << endl;
