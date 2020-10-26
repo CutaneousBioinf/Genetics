@@ -17,7 +17,7 @@ const int G = 2;
 const int T = 3;
 
 const int MAX_DATA_LENGTH = 60;
-const int MAX_BIG_DATA_LENGTH = 200;
+const int MAX_BIG_DATA_LENGTH = 60;
 
 // Defines the struct containing genome data struct
 struct SNPData {
@@ -175,6 +175,15 @@ int count_other_members_big(DiskHash<SNPDataBig> *ht, string b_key) {
 	return i + 1;
 }
 
+// Count other members pointers
+int count_other_members_pointers(DiskHash<size_t> *ht, string b_key) {
+	int i = -1;
+	while (ht->is_member((b_key + "_" + to_string(i + 1)).c_str())) {
+		++i;
+	}
+	return i + 1;
+}
+
 // Create chromosome/position/alleles table
 int create_cpa_table(const char *source_name, const char* rsid_table_name) {
 	DiskHash<SNPDataBig> ht(rsid_table_name, key_maxlen_big, dht::DHOpenRW);
@@ -230,6 +239,7 @@ int create_cpa_table(const char *source_name, const char* rsid_table_name) {
 	return 0;
 }
 
+
 int create_cpa_table_pointer(const char *source_name, const char* rsid_table_name) {
 	DiskHash<size_t> ht(rsid_table_name, key_maxlen_big, dht::DHOpenRW);
 	string line;
@@ -254,17 +264,20 @@ int create_cpa_table_pointer(const char *source_name, const char* rsid_table_nam
 		string ref_allele = tsv[ref_allele_col];
 		string alleles = tsv[alleles_col];
 		string rsid_num = rsid_str.substr(2, rsid_str.length());
-		if (stored_data.length() > max_content_length) {
-			max_content_length = stored_data.length();
-		}
 		string b_key = "";
 		if (is_snp(alleles)) {
 			b_key = "sc" + chromosome_key + "_" + startpos;
 		}
 		if (b_key != "") {
-			cout << "adding " << b_key << "_" << count_other_members_big(&ht, b_key) << "..." << endl;
+			cout << "adding " << b_key << "_" << count_other_members_pointers(&ht, b_key) << "..." << endl;
 			cout << file.tellg() << endl;
-			const bool inserted = ht.insert((b_key + "_" + to_string(count_other_members_big(&ht, b_key))).c_str(), prev_pos);
+			string stored_data = rsid_num + "\t" + ref_allele + "\t" + alleles;
+		if (stored_data.length() > MAX_BIG_DATA_LENGTH) {
+			cout << "ERROR: Maximum length exceeded, encountered string of length " << stored_data.length() << endl;
+			cout << stored_data << endl;
+			continue;
+		}
+			const bool inserted = ht.insert((b_key + "_" + to_string(count_other_members_pointers(&ht, b_key))).c_str(), prev_pos);
 			if (!inserted) {
 				cout << "[already in table]" << endl;
 			}
@@ -276,6 +289,7 @@ int create_cpa_table_pointer(const char *source_name, const char* rsid_table_nam
 	cout << "Max content length: " << max_content_length << endl;
 	return 0;
 }
+
 
 // Gets the RSID from the hash table and prints to standard out the chromosome, starting position, and alleles
 int get_rsid(const char *rsid_table_name, const char* rsid_param) {
@@ -310,16 +324,16 @@ bool in_list(vector<string> s, string key) {
 
 // Lookup chromosome/position/alleles and print RSID(s)
 int get_cpa(const char *rsid_table_name, const char * chromosome_c, const char *position_c, const char *allele_c) {
-	DiskHash<SNPData> ht(rsid_table_name, key_maxlen, dht::DHOpenRO);
+	DiskHash<SNPDataBig> ht(rsid_table_name, key_maxlen, dht::DHOpenRO);
 	string chromosome(chromosome_c);
 	int position = atoi(position_c) - 1;
 	string allele(allele_c);
 	string snp_b_key = "sc" + chromosome_to_key(chromosome) + "_" + to_string(position);
-	SNPData *member;
+	SNPDataBig *member;
 	cout << snp_b_key << endl;
-	cout << count_other_members(&ht, snp_b_key) << endl;
-	for (int i = 0; i < count_other_members(&ht, snp_b_key); ++i) {
-		SNPData *item = ht.lookup((snp_b_key + "_" + to_string(i)).c_str());
+	cout << count_other_members_big(&ht, snp_b_key) << endl;
+	for (int i = 0; i < count_other_members_big(&ht, snp_b_key); ++i) {
+		SNPDataBig *item = ht.lookup((snp_b_key + "_" + to_string(i)).c_str());
 		vector<string> pieces = str_split(item->data, '\t');
 		string rsid_num = pieces[0];
 		string ref_allele = pieces[1];
@@ -328,6 +342,35 @@ int get_cpa(const char *rsid_table_name, const char * chromosome_c, const char *
 			cout << "rs" << rsid_num << endl;
 		}
 	}
+	return 0;
+}
+
+// Look up chromosome/position/alleles and print RSID(s) [pointer version]
+int get_cpa_pointers(const char *data_file_name, const char *rsid_table_name, const char * chromosome_c, const char *position_c, const char *allele_c) {
+	DiskHash<size_t> ht(rsid_table_name, key_maxlen, dht::DHOpenRO);
+	ifstream file;
+	file.open(string(data_file_name));
+	string chromosome(chromosome_c);
+	int position = atoi(position_c) - 1;
+	string allele(allele_c);
+	string snp_b_key = "sc" + chromosome_to_key(chromosome) + "_" + to_string(position);
+	size_t *member;
+	cout << snp_b_key << endl;
+	cout << count_other_members_pointers(&ht, snp_b_key) << endl;
+	for (int i = 0; i < count_other_members_pointers(&ht, snp_b_key); ++i) {
+		size_t *item = ht.lookup((snp_b_key + "_" + to_string(i)).c_str());
+		file.seekg(*item);
+		string data_text;
+		getline(file, data_text);
+		vector<string> pieces = str_split(data_text, '\t');
+		string rsid_num = pieces[0];
+		string ref_allele = pieces[1];
+		vector<string> alleles = str_split(pieces[2], '/');
+		if (in_list(alleles, ref_allele) && (in_list(alleles, allele) || in_list(alleles, get_compliment(allele)))) {
+			cout << "rs" << rsid_num << endl;
+		}
+	}
+	file.close();
 	return 0;
 }
 
@@ -354,6 +397,15 @@ int main(int argc, char** argv) {
 				return 1;
 			}
 		}
+		else if (main_command == "create_cpa_table_pointer") {
+			if (argc >= 4) {
+				return create_cpa_table_pointer(argv[3], argv[4]);
+			}
+			else {
+				cout << "Please follow create_cpa_table_pointers by the file name of the source and destination" << endl;
+				return 1;
+			}
+		}
 		else if (main_command == "get_rsid") {
 			if (argc >= 4) {
 				return get_rsid(argv[2], argv[3]);
@@ -366,6 +418,15 @@ int main(int argc, char** argv) {
 		else if (main_command == "get_cpa") {
 			if (argc >= 6) {
 				return get_cpa(argv[2], argv[3], argv[4], argv[5]);
+			}
+			else {
+				cout << "Please follow get_cpa by the file name of the table, chromosome (chr[1...22,x,y]), position number, and allele" << endl;
+				return 1;
+			}
+		}
+		else if (main_command == "get_cpa_pointers") {
+			if (argc >= 7) {
+				return get_cpa_pointers(argv[2], argv[3], argv[4], argv[5], argv[6]);
 			}
 			else {
 				cout << "Please follow get_cpa by the file name of the table, chromosome (chr[1...22,x,y]), position number, and allele" << endl;
