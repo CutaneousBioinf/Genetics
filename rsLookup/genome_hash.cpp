@@ -324,14 +324,13 @@ bool in_list(vector<string> s, string key) {
 
 // Lookup chromosome/position/alleles and print RSID(s)
 int get_cpa(const char *rsid_table_name, const char * chromosome_c, const char *position_c, const char *allele_c) {
-	DiskHash<SNPDataBig> ht(rsid_table_name, key_maxlen, dht::DHOpenRO);
+	DiskHash<SNPDataBig> ht(rsid_table_name, key_maxlen_big, dht::DHOpenRO);
 	string chromosome(chromosome_c);
 	int position = atoi(position_c) - 1;
 	string allele(allele_c);
 	string snp_b_key = "sc" + chromosome_to_key(chromosome) + "_" + to_string(position);
 	SNPDataBig *member;
-	cout << snp_b_key << endl;
-	cout << count_other_members_big(&ht, snp_b_key) << endl;
+	int found = 0;
 	for (int i = 0; i < count_other_members_big(&ht, snp_b_key); ++i) {
 		SNPDataBig *item = ht.lookup((snp_b_key + "_" + to_string(i)).c_str());
 		vector<string> pieces = str_split(item->data, '\t');
@@ -340,14 +339,16 @@ int get_cpa(const char *rsid_table_name, const char * chromosome_c, const char *
 		vector<string> alleles = str_split(pieces[2], '/');
 		if (in_list(alleles, ref_allele) && (in_list(alleles, allele) || in_list(alleles, get_compliment(allele)))) {
 			cout << "rs" << rsid_num << endl;
+			++found;
 		}
 	}
+	if (!found) cout << "No matches found" << endl;
 	return 0;
 }
 
 // Look up chromosome/position/alleles and print RSID(s) [pointer version]
 int get_cpa_pointers(const char *data_file_name, const char *rsid_table_name, const char * chromosome_c, const char *position_c, const char *allele_c) {
-	DiskHash<size_t> ht(rsid_table_name, key_maxlen, dht::DHOpenRO);
+	DiskHash<size_t> ht(rsid_table_name, key_maxlen_big, dht::DHOpenRO);
 	ifstream file;
 	file.open(string(data_file_name));
 	string chromosome(chromosome_c);
@@ -355,22 +356,23 @@ int get_cpa_pointers(const char *data_file_name, const char *rsid_table_name, co
 	string allele(allele_c);
 	string snp_b_key = "sc" + chromosome_to_key(chromosome) + "_" + to_string(position);
 	size_t *member;
-	cout << snp_b_key << endl;
-	cout << count_other_members_pointers(&ht, snp_b_key) << endl;
+	int found = 0;
 	for (int i = 0; i < count_other_members_pointers(&ht, snp_b_key); ++i) {
 		size_t *item = ht.lookup((snp_b_key + "_" + to_string(i)).c_str());
 		file.seekg(*item);
 		string data_text;
 		getline(file, data_text);
 		vector<string> pieces = str_split(data_text, '\t');
-		string rsid_num = pieces[0];
-		string ref_allele = pieces[1];
-		vector<string> alleles = str_split(pieces[2], '/');
+		string rsid_num = pieces[rsid_col];
+		string ref_allele = pieces[ref_allele_col];
+		vector<string> alleles = str_split(pieces[alleles_col], '/');
 		if (in_list(alleles, ref_allele) && (in_list(alleles, allele) || in_list(alleles, get_compliment(allele)))) {
-			cout << "rs" << rsid_num << endl;
+			cout << rsid_num << endl;
+			++found;
 		}
 	}
 	file.close();
+	if (!found) cout << "No matches found" << endl;
 	return 0;
 }
 
@@ -399,7 +401,7 @@ int main(int argc, char** argv) {
 		}
 		else if (main_command == "create_cpa_table_pointer") {
 			if (argc >= 4) {
-				return create_cpa_table_pointer(argv[3], argv[4]);
+				return create_cpa_table_pointer(argv[2], argv[3]);
 			}
 			else {
 				cout << "Please follow create_cpa_table_pointers by the file name of the source and destination" << endl;
@@ -424,12 +426,12 @@ int main(int argc, char** argv) {
 				return 1;
 			}
 		}
-		else if (main_command == "get_cpa_pointers") {
+		else if (main_command == "get_cpa_pointer") {
 			if (argc >= 7) {
 				return get_cpa_pointers(argv[2], argv[3], argv[4], argv[5], argv[6]);
 			}
 			else {
-				cout << "Please follow get_cpa by the file name of the table, chromosome (chr[1...22,x,y]), position number, and allele" << endl;
+				cout << "Please follow get_cpa_pointer by the file name of the dataset, file name of the table, chromosome (chr[1...22,x,y]), position number, and allele" << endl;
 				return 1;
 			}
 		}
