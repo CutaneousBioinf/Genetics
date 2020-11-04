@@ -4,7 +4,7 @@ import click
 import unittest
 
 '''notes: This process takes a max of about 4500MB of memory while running. (for a 20mil line database)
-Sorting while keeping the data in the dataframe takes longer than the current process, due to the xtra looping necessary
+Sorting while keeping the data in the dataframe takes longer than the current process, due to the extra looping necessary
 to remove rows with P-values under the threshold.'''
 
 
@@ -39,38 +39,50 @@ def getLoci(threshold, path, gap, chromosome):
         p_vals = p_vals[chromosomes == chromosome]
         chromosomes = chromosomes[chromosomes == chromosome]
 
-    # stacks positions onto p values and sorts by positions
-    significantMarkers = np.vstack((chromosomes, positions, p_vals))
+    # stacks positions onto p values and sorts by positions, then by chromosomes
+    significantMarkers = np.vstack((positions, chromosomes, p_vals))
+    significantMarkers = significantMarkers[:, significantMarkers[0].argsort()]
 
     # finding markers with significant gaps
     mostSignificantMarkers = []
-    for i in range(1, len(significantMarkers)):
-        prevPosition = significantMarkers[1][i - 1]
-        position = significantMarkers[1][i]
-        if abs(prevPosition - position) >= gap and significantMarkers[0][i - 1] == significantMarkers[0][
-            i]:  # making sure 2 datapoints from different chromosomes dont get flagged
-            mostSignificantMarkers.append(significantMarkers[i])
+    if chromosome != 0:
+        maxPValue = 0
+        currentSignificantMarker = []
+        for i in range(1, len(significantMarkers)):
+            prevPosition = significantMarkers[0][i - 1]
+            position = significantMarkers[0][i]
+            if abs(prevPosition - position) >= gap and significantMarkers[3][i] > maxPValue:
+                currentSignificantMarker = significantMarkers[i]
+                maxPValue = significantMarkers[2][i]
+
+        mostSignificantMarkers.append(currentSignificantMarker)
+    # gets loci from each chromosome, and puts them in array
+    else:
+        for j in range(24):
+            maxPValue = 0
+            currentSignificantMarker = []
+            for i in range(1, len(significantMarkers)):
+                prevPosition = significantMarkers[0][i - 1]
+                position = significantMarkers[0][i]
+                if abs(prevPosition - position) >= gap and significantMarkers[3][i] > maxPValue and \
+                        significantMarkers[1][i] == chromosome:
+                    currentSignificantMarker = significantMarkers[i]
+                    maxPValue = significantMarkers[2][i]
+            mostSignificantMarkers.append(currentSignificantMarker)
 
     return significantMarkers, mostSignificantMarkers
 
 
-# unit tests
-class Test(unittest.TestCase):
-
-    # significant markers and most significant markers should be the same with a gap size of 0
-    def testMostSig(self):
-        self.assertEqual(getLoci()[0] == getLoci()[1])
-
-    # assuming an input of 2 to the --chromosome part of CLI
-    def testChromosomeIsolation(self):
-        self.assertEqual(getLoci()[0][0][0] == 2)
-
-    # come up with more tests
-
-
 def main():
-    print(getLoci())
-    unittest.main()
+    significantMarkers, mostSignificantMarkers = getLoci()
+
+    # makes sure that there are at most 23 loci, one for each chromosome
+    assert len(mostSignificantMarkers) <= 23
+
+    assert len(significantMarkers) > len(mostSignificantMarkers)
+
+    # true if positions are sorted
+    assert significantMarkers[0][0] < significantMarkers[0][1]
 
 
 if __name__ == "__main__":
