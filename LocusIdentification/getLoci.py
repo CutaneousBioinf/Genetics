@@ -51,7 +51,7 @@ def getLoci(threshold, path, gap, chromosome):
         for i in range(1, len(significantMarkers)):
             prevPosition = significantMarkers[0][i - 1]
             position = significantMarkers[0][i]
-            if abs(prevPosition - position) >= gap and significantMarkers[3][i] > maxPValue:
+            if abs(prevPosition - position) >= gap and significantMarkers[2][i] > maxPValue: #p value inequality
                 currentSignificantMarker = significantMarkers[i]
                 maxPValue = significantMarkers[2][i]
 
@@ -64,8 +64,8 @@ def getLoci(threshold, path, gap, chromosome):
             for i in range(1, len(significantMarkers)):
                 prevPosition = significantMarkers[0][i - 1]
                 position = significantMarkers[0][i]
-                if abs(prevPosition - position) >= gap and significantMarkers[3][i] > maxPValue and \
-                        significantMarkers[1][i] == chromosome:
+                if abs(prevPosition - position) >= gap and significantMarkers[2][i] > maxPValue and \
+                        significantMarkers[1][i] == chromosome: #p value inequality and making sure that 
                     currentSignificantMarker = significantMarkers[i]
                     maxPValue = significantMarkers[2][i]
             mostSignificantMarkers.append(currentSignificantMarker)
