@@ -1,11 +1,8 @@
 import pandas as pd
 import numpy as np
 import click
-import unittest
 
-'''notes: This process takes a max of about 4500MB of memory while running. (for a 20mil line database)
-Sorting while keeping the data in the dataframe takes longer than the current process, due to the extra looping necessary
-to remove rows with P-values under the threshold.'''
+'''As of 11/6/2020: This process takes a max of about 5000MB of memory while running. (for a 20mil line database) '''
 
 
 # command line interface
@@ -25,7 +22,7 @@ def getLoci(threshold, path, gap, chromosome):
     p_vals = np.array(df["p_value"].to_list())
     positions = np.array(df["pos"].to_list())
 
-    # delete dataframe from memory
+    # delete dataframe variable, python garbage collector deletes it from memory
     del df
 
     # compare to threshold
@@ -42,47 +39,50 @@ def getLoci(threshold, path, gap, chromosome):
     # stacks positions onto p values and sorts by positions, then by chromosomes
     significantMarkers = np.vstack((positions, chromosomes, p_vals))
     significantMarkers = significantMarkers[:, significantMarkers[0].argsort()]
+    significantMarkers = significantMarkers[:, significantMarkers[1].argsort()]
 
-    # finding markers with significant gaps
-    mostSignificantMarkers = []
+    # finds the locus if a specific chromosome is defined
+    significantLocus = []
     if chromosome != 0:
-        maxPValue = 0
-        currentSignificantMarker = []
+        currentSignificantMarker = [0, 0, 0]
         for i in range(1, len(significantMarkers)):
             prevPosition = significantMarkers[0][i - 1]
             position = significantMarkers[0][i]
-            if abs(prevPosition - position) >= gap and significantMarkers[2][i] > maxPValue: #p value inequality
+            if abs(prevPosition - position) >= gap and significantMarkers[2][i] > currentSignificantMarker[2]: # p
+                # value inequality
                 currentSignificantMarker = significantMarkers[i]
-                maxPValue = significantMarkers[2][i]
 
-        mostSignificantMarkers.append(currentSignificantMarker)
+        significantLocus.append(currentSignificantMarker)
+
     # gets loci from each chromosome, and puts them in array
     else:
-        for j in range(24):
-            maxPValue = 0
-            currentSignificantMarker = []
+        for j in range(1, 24):
+            significantLocus = [0, 0, 0]
             for i in range(1, len(significantMarkers)):
                 prevPosition = significantMarkers[0][i - 1]
                 position = significantMarkers[0][i]
-                if abs(prevPosition - position) >= gap and significantMarkers[2][i] > maxPValue and \
-                        significantMarkers[1][i] == chromosome: #p value inequality and making sure that 
+                if abs(prevPosition - position) >= gap and significantMarkers[2][i] > significantLocus[2] and \
+                        significantMarkers[1][i] == j: # p value inequality and making sure that the marker is a
+                    # chromosome that we want
                     currentSignificantMarker = significantMarkers[i]
-                    maxPValue = significantMarkers[2][i]
-            mostSignificantMarkers.append(currentSignificantMarker)
+            significantLocus.append(currentSignificantMarker)
 
-    return significantMarkers, mostSignificantMarkers
+    return significantMarkers, significantLocus
 
 
 def main():
-    significantMarkers, mostSignificantMarkers = getLoci()
+    significantMarkers, significantLocus = getLoci()
 
     # makes sure that there are at most 23 loci, one for each chromosome
-    assert len(mostSignificantMarkers) <= 23
+    assert len(significantLocus) <= 23
 
-    assert len(significantMarkers) > len(mostSignificantMarkers)
+    # There can never be more loci than markers
+    assert len(significantMarkers) >= len(significantLocus)
 
     # true if positions are sorted
     assert significantMarkers[0][0] < significantMarkers[0][1]
+
+    print(significantMarkers, significantLocus)
 
 
 if __name__ == "__main__":
