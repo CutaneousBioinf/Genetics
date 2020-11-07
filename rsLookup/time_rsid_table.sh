@@ -21,9 +21,13 @@ convert_time() {
 	echo $tt
 }
 
+if [ $1 == "rsid" ]
+then
 while IFS= read -r rsid
 do
-{ tte=$( { time ./genome_hash.exe get_rsid rsid.dht $rsid 1>&3- 2>&4-; } 2>&1 ); } 3>&1 4>&2
+# { tte=$( { time ./genome_hash.exe get_rsid rsid.dht $rsid 1>&3- 2>&4-; } 2>&1 ); } 3>&1 4>&2
+./genome_hash.exe get_rsid rsid.dht $rsid
+: <<'END'
 t_arr=()
 while read -r t_str
 do
@@ -37,7 +41,29 @@ real_time+=($(convert_time ${real_t}))
 user_time+=($(convert_time ${user_t}))
 sys_time+=($(convert_time ${sys_t}))
 i=$((i+1))
+END
 done < rsid_lookup_tests.in
+elif [ $1 == "snp_data" ]
+then
+while IFS= read -r line
+do
+chromosome=$(echo "$line" | cut -f1 -d$'\t')
+position=$(echo "$line" | cut -f2 -d$'\t')
+allele=$(echo "$line" | cut -f3 -d$'\t')
+./genome_hash.exe get_cpa snp.dht $chromosome $position $allele
+done < snp_tests.in
+elif [ $1 == "snp_pointer" ]
+then
+while IFS= read -r line
+do
+chromosome=$(echo "$line" | cut -f1 -d$'\t')
+position=$(echo "$line" | cut -f2 -d$'\t')
+allele=$(echo "$line" | cut -f3 -d$'\t')
+./genome_hash.exe get_cpa_pointer ../../../snp150Common.txt snp_pointer.dht $chromosome $position $allele
+done < snp_tests.in
+fi
+
+exit
 
 real_sum=$(array_sum "${real_time[@]}")
 user_sum=$(array_sum "${user_time[@]}")
