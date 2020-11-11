@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+# !!! Currently still a draft
 def compareLoci(path1, path2):
     df1 = pd.read_csv(path1)
     df2 = pd.read_csv(path2)
