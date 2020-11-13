@@ -39,6 +39,16 @@ const int alleles_col = 9;
 const int key_maxlen = 15;
 const int key_maxlen_big = 20;
 
+// Check if string in list
+bool in_list(vector<string> s, string key) {
+	for (size_t i = 0; i < s.size(); ++i) {
+		if (s[i] == key) {
+			return true;
+		}
+	}
+	return false;
+}
+
 // Converts int to char array containing binary digits that make up the int
 void convert_int_to_char_array(unsigned int num, char* arr) {
 	arr[0] = (num >> 24);
@@ -54,6 +64,15 @@ void convert_int_to_char_array(unsigned int num, char* arr) {
 		}
 	}
 	arr[4] = (char) params;
+}
+
+string join_str(const vector<string> &pieces, const string &separator) {
+	string str = "";
+	for (int i = 0; i < pieces.size(); ++i) {
+		if (str == "") str = pieces[i];
+		else str += separator + pieces[i];
+	}
+	return str;
 }
 
 // Splits string by delimiter into vector of strings
@@ -155,7 +174,21 @@ bool is_snp(const string &alleles_str) {
 	for (size_t i = 0; i < alleles.size(); ++i) {
 		if (!is_allele(alleles[i])) return false;
 	}
+	// if (alleles.size() > 0) cout << "true " << join_str(alleles, "/");
 	return alleles.size() > 0;
+}
+
+string canonical_alleles(const string &alleles_str) {
+	if (alleles_str == "" || alleles_str.find("/") == string::npos) return "";
+	vector<string> alleles = str_split(alleles_str, '/');
+	for (size_t i = 0; i < alleles.size(); ++i) {
+		if (!is_allele(alleles[i])) return "";
+	}
+	if (alleles.size() == 0) return "";
+	vector<string> c_alleles;
+	if (in_list(alleles, "A") || in_list(alleles, "T")) c_alleles.push_back("A");
+	if (in_list(alleles, "C") || in_list(alleles, "G")) c_alleles.push_back("C");
+	return join_str(c_alleles, "/");
 }
 
 // Counts the number of members of the hash table of key c_x, where c is constant and x is a number incremented by 1
@@ -245,13 +278,18 @@ int create_cpa_table_pointer(const char *source_name, const char* rsid_table_nam
 	string line;
 	ifstream file;
 	file.open(string(source_name));
+	ofstream s_file;
+	s_file.open(string(rsid_table_name) + ".data");
 	if (!file.is_open()) {
 		cout << "Source file could not be opened" << endl;
 		return 1;
 	}
 	int max_rsid_length = 0;
 	int max_content_length = 0;
-	size_t prev_pos = file.tellg();
+	size_t prev_pos = s_file.tellp();
+	string prev_chromosome = "";
+	string prev_position = "";
+	string line_break = "";
 	while (std::getline(file, line)) {
 		vector<string> tsv = str_split(line, '\t');
 		string chromosome = tsv[chromosome_col];
@@ -263,28 +301,26 @@ int create_cpa_table_pointer(const char *source_name, const char* rsid_table_nam
 		}
 		string ref_allele = tsv[ref_allele_col];
 		string alleles = tsv[alleles_col];
+		string c_alleles = canonical_alleles(alleles);
 		string rsid_num = rsid_str.substr(2, rsid_str.length());
 		string b_key = "";
 		if (is_snp(alleles)) {
-			b_key = "sc" + chromosome_key + "_" + startpos;
-		}
-		if (b_key != "") {
-			cout << "adding " << b_key << "_" << count_other_members_pointers(&ht, b_key) << "..." << endl;
-			cout << file.tellg() << endl;
-			string stored_data = rsid_num + "\t" + ref_allele + "\t" + alleles;
-		if (stored_data.length() > MAX_BIG_DATA_LENGTH) {
-			cout << "ERROR: Maximum length exceeded, encountered string of length " << stored_data.length() << endl;
-			cout << stored_data << endl;
-			continue;
-		}
-			const bool inserted = ht.insert((b_key + "_" + to_string(count_other_members_pointers(&ht, b_key))).c_str(), prev_pos);
-			if (!inserted) {
-				cout << "[already in table]" << endl;
+			if (prev_chromosome != chromosome || prev_position != startpos) {
+				s_file << line_break;
+				b_key = "sc" + chromosome_key + "_" + startpos;
+				prev_pos = s_file.tellp();
+			prev_position = startpos;
+			prev_chromosome = chromosome;
+				const bool inserted = ht.insert(b_key.c_str(), prev_pos);
+				line_break = "\n";
 			}
+			else s_file << "\t";
+			s_file << rsid_str << "\t" << ref_allele << "\t" << c_alleles;
 		}
-		prev_pos = file.tellg();
 	}
+	s_file << line_break;
 	file.close();
+	s_file.close();
 	cout << "Max RSID length (excluding rs): " << max_rsid_length << endl;
 	cout << "Max content length: " << max_content_length << endl;
 	return 0;
@@ -310,16 +346,6 @@ int get_rsid(const char *rsid_table_name, const char* rsid_param) {
 		return 1;
 	}
 	return 0;
-}
-
-// Check if string in list
-bool in_list(vector<string> s, string key) {
-	for (size_t i = 0; i < s.size(); ++i) {
-		if (s[i] == key) {
-			return true;
-		}
-	}
-	return false;
 }
 
 // Lookup chromosome/position/alleles and print RSID(s)
@@ -350,22 +376,21 @@ int get_cpa(const char *rsid_table_name, const char * chromosome_c, const char *
 int get_cpa_pointers(const char *data_file_name, const char *rsid_table_name, const char * chromosome_c, const char *position_c, const char *allele_c) {
 	DiskHash<size_t> ht(rsid_table_name, key_maxlen_big, dht::DHOpenRO);
 	ifstream file;
-	file.open(string(data_file_name));
+	file.open(string(rsid_table_name) + ".data");
 	string chromosome(chromosome_c);
 	int position = atoi(position_c) - 1;
 	string allele(allele_c);
 	string snp_b_key = "sc" + chromosome_to_key(chromosome) + "_" + to_string(position);
-	size_t *member;
 	int found = 0;
-	for (int i = 0; i < count_other_members_pointers(&ht, snp_b_key); ++i) {
-		size_t *item = ht.lookup((snp_b_key + "_" + to_string(i)).c_str());
-		file.seekg(*item);
-		string data_text;
-		getline(file, data_text);
-		vector<string> pieces = str_split(data_text, '\t');
-		string rsid_num = pieces[rsid_col];
-		string ref_allele = pieces[ref_allele_col];
-		vector<string> alleles = str_split(pieces[alleles_col], '/');
+	size_t *item = ht.lookup(snp_b_key.c_str());
+	string line;
+	file.seekg(*item);
+	getline(file, line);
+	vector<string> pieces = str_split(line, '\t');
+	for (int i = 0; i < pieces.size() / 3; ++i) {
+		vector<string> alleles = str_split(pieces[2 + 3*i], '/');
+		string rsid_num = pieces[3*i];
+		string ref_allele = pieces[3*i + 1];
 		if (in_list(alleles, ref_allele) && (in_list(alleles, allele) || in_list(alleles, get_compliment(allele)))) {
 			cout << rsid_num << endl;
 			++found;
