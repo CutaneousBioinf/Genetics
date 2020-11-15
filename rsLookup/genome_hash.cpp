@@ -315,7 +315,7 @@ int create_cpa_table_pointer(const char *source_name, const char* rsid_table_nam
 				line_break = "\n";
 			}
 			else s_file << "\t";
-			s_file << rsid_str << "\t" << ref_allele << "\t" << c_alleles;
+			s_file << rsid_str << "\t" << alleles;
 		}
 	}
 	s_file << line_break;
@@ -382,16 +382,19 @@ int get_cpa_pointers(const char *data_file_name, const char *rsid_table_name, co
 	string allele(allele_c);
 	string snp_b_key = "sc" + chromosome_to_key(chromosome) + "_" + to_string(position);
 	int found = 0;
+	if (!ht.is_member(snp_b_key.c_str())) {
+		cout << "No matches found";
+		return 1;
+	}
 	size_t *item = ht.lookup(snp_b_key.c_str());
 	string line;
 	file.seekg(*item);
 	getline(file, line);
 	vector<string> pieces = str_split(line, '\t');
-	for (int i = 0; i < pieces.size() / 3; ++i) {
-		vector<string> alleles = str_split(pieces[2 + 3*i], '/');
-		string rsid_num = pieces[3*i];
-		string ref_allele = pieces[3*i + 1];
-		if (in_list(alleles, ref_allele) && (in_list(alleles, allele) || in_list(alleles, get_compliment(allele)))) {
+	for (int i = 0; i < pieces.size() / 2; ++i) {
+		vector<string> alleles = str_split(pieces[2*i + 1], '/');
+		string rsid_num = pieces[2*i];
+		if ((in_list(alleles, allele) || in_list(alleles, get_compliment(allele)))) {
 			cout << rsid_num << endl;
 			++found;
 		}
