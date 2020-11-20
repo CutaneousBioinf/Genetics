@@ -49,6 +49,20 @@ bool in_list(vector<string> s, string key) {
 	return false;
 }
 
+bool is_subset(vector<string> a, vector<string> b) {
+	for (size_t i = 0; i < a.size(); ++i) {
+		bool found = false;
+		for (size_t j = 0; j < b.size(); ++j) {
+			if (a[i] == b[j]) {
+				found = true;
+				break;
+			}
+		}
+		if (!found) return false;
+	}
+	return true;
+}
+
 // Converts int to char array containing binary digits that make up the int
 void convert_int_to_char_array(unsigned int num, char* arr) {
 	arr[0] = (num >> 24);
@@ -159,12 +173,20 @@ bool is_allele(string s) {
 }
 
 // Get complement of allele (A->T, C->G)
-string get_compliment(string allele) {
+string get_complement(string allele) {
 	if (allele == "A") return "T";
 	else if (allele == "C") return "G";
 	else if (allele == "G") return "C";
 	else if (allele == "T") return "A";
 	else return "";
+}
+
+vector<string> get_complement(const vector<string> &alleles) {
+	vector<string> complement;
+	for (size_t i = 0; i < alleles.size(); ++i) {
+		complement.push_back(get_complement(alleles[i]));
+	}
+	return complement;
 }
 
 // Check if allele string is SNP on the condition that all slash-separated values are either A, C, G, or T
@@ -363,7 +385,7 @@ int get_cpa(const char *rsid_table_name, const char * chromosome_c, const char *
 		string rsid_num = pieces[0];
 		string ref_allele = pieces[1];
 		vector<string> alleles = str_split(pieces[2], '/');
-		if (in_list(alleles, ref_allele) && (in_list(alleles, allele) || in_list(alleles, get_compliment(allele)))) {
+		if (in_list(alleles, ref_allele) && (in_list(alleles, allele) || in_list(alleles, get_complement(allele)))) {
 			cout << "rs" << rsid_num << endl;
 			++found;
 		}
@@ -380,10 +402,11 @@ int get_cpa_pointers(const char *data_file_name, const char *rsid_table_name, co
 	string chromosome(chromosome_c);
 	int position = atoi(position_c) - 1;
 	string allele(allele_c);
+	vector<string> alleles_in = str_split(allele, '/');
 	string snp_b_key = "sc" + chromosome_to_key(chromosome) + "_" + to_string(position);
 	int found = 0;
 	if (!ht.is_member(snp_b_key.c_str())) {
-		cout << "No matches found";
+		cout << "No matches found" << endl;;
 		return 1;
 	}
 	size_t *item = ht.lookup(snp_b_key.c_str());
@@ -393,8 +416,9 @@ int get_cpa_pointers(const char *data_file_name, const char *rsid_table_name, co
 	vector<string> pieces = str_split(line, '\t');
 	for (int i = 0; i < pieces.size() / 2; ++i) {
 		vector<string> alleles = str_split(pieces[2*i + 1], '/');
+		vector<string> complement = get_complement(alleles);
 		string rsid_num = pieces[2*i];
-		if ((in_list(alleles, allele) || in_list(alleles, get_compliment(allele)))) {
+		if (is_subset(alleles_in, alleles) || is_subset(alleles_in, complement)) {
 			cout << rsid_num << endl;
 			++found;
 		}
