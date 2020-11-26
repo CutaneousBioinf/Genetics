@@ -60,7 +60,7 @@ def getLoci(threshold, path, gap, chromosome, outputfile):
             significantLocus = significantMarkers[i, :]
 
         if significantMarkers[i][1] != currentChromosome:
-            currentChromosome += significantMarkers[i][1]
+            currentChromosome = significantMarkers[i][1]
             p_val = 1
 
         significantLoci.append(significantLocus)
@@ -75,7 +75,7 @@ def getLoci(threshold, path, gap, chromosome, outputfile):
 
 def testcases(significantMarkers, significantLocus):
     # one chromosome
-    assert(significantMarkers[0][1] == significantMarkers[-1][1])
+    assert (significantMarkers[0][1] == significantMarkers[-1][1])
     # one of the chromosomes only contains one marker
     assert (len(significantMarkers) == 1)
     # non numeric chromosomes
