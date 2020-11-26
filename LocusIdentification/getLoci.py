@@ -44,40 +44,26 @@ def getLoci(threshold, path, gap, chromosome, outputfile):
 
     sys.stderr.write("Data sorted and filtered.\n")
 
-    # finds the loci if a specific chromosome is defined
     significantLoci = []
     rows = np.shape(significantMarkers)[0]
-    if chromosome != 0:
-        currentSignificantMarker = [0, 0, 0]
-        for i in range(1, rows):
-            prevPosition = significantMarkers[i - 1][0]
-            position = significantMarkers[i][0]
-            if abs(prevPosition - position) >= gap and significantMarkers[i][2] < currentSignificantMarker[2]:  # p
-                # value inequality
-                currentSignificantMarker = significantMarkers[i, :]
-
-        significantLoci.append(currentSignificantMarker)
-
     # gets loci from each chromosome, and puts them in array
-    else:
-        significantLocus = [0, 0, 0]
-        currentChromosome = 1
-        for i in range(1, rows):
-            prevPosition = significantMarkers[i - 1][0]
-            position = significantMarkers[i][0]
+    significantLocus = [0, 0, 0]
+    currentChromosome = 1
+    # set initial p value to a large number
+    p_val = 1
+    for i in range(1, rows):
+        prevPosition = significantMarkers[i - 1][0]
+        position = significantMarkers[i][0]
 
-            if significantMarkers[i][1] != currentChromosome:
-                currentChromosome += 1
+        if (abs(prevPosition - position) >= gap and significantMarkers[i][1] == currentChromosome and
+            significantMarkers[i][2] < p_val) or significantMarkers[i][1] != currentChromosome:
+            significantLocus = significantMarkers[i, :]
 
-            if abs(prevPosition - position) >= gap and significantMarkers[i][1] == currentChromosome:
-                significantLocus = significantMarkers[i, :]
+        if significantMarkers[i][1] != currentChromosome:
+            currentChromosome += significantMarkers[i][1]
+            p_val = 1
 
-            # if there is not a significant loci for the current chromosome, add one
-            if significantLocus[2] < significantLoci[-1][2] and significantLoci[-1][1] == currentChromosome - 1:
-                significantLoci.append(significantLocus)
-            # else, edit the last loci in the significantLoci list
-            elif significantLocus[2] < significantLoci[-1][2] and significantLoci[-1][1] == currentChromosome:
-                significantLoci[-1] = significantLocus
+        significantLoci.append(significantLocus)
 
     sys.stderr.write("Loci identified.\n")
 
@@ -88,16 +74,12 @@ def getLoci(threshold, path, gap, chromosome, outputfile):
 
 
 def testcases(significantMarkers, significantLocus):
-    # makes sure that there are at most 23 loci, one for each chromosome
-    assert len(significantLocus) <= 23
-
-    # There can never be more loci than markers
-    assert len(significantMarkers) >= len(significantLocus)
-
-    # true if positions are sorted
-    assert significantMarkers[0][0] < significantMarkers[0][1]
-
-    print(significantMarkers, significantLocus)
+    # one chromosome
+    assert(significantMarkers[0][1] == significantMarkers[-1][1])
+    # one of the chromosomes only contains one marker
+    assert (len(significantMarkers) == 1)
+    # non numeric chromosomes
+    # p value is N/A
 
 
 def main():

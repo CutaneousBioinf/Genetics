@@ -1,8 +1,13 @@
 import numpy as np
 import pandas as pd
+import click
 
 
-def compareLoci(path1, path2):
+@click.command()
+@click.option("--path1")
+@click.option("--path2")
+@click.option("--gap", default=500)
+def compareLoci(path1, path2, gap):
     df1 = pd.read_csv(path1)
     df2 = pd.read_csv(path2)
 
@@ -16,7 +21,7 @@ def compareLoci(path1, path2):
     similarloci = []
     for i in range(0, len(loci1)):
         for j in range(0, len(loci2)):
-            if abs(float(loci1[i][0]) - float(loci2[j][0])) <= 500 and int(loci1[i][2]) == int(loci2[i][2]):
+            if abs(float(loci1[i][0]) - float(loci2[j][0])) <= gap and int(loci1[i][2]) == int(loci2[i][2]):
                 similarloci.append((np.asarray(loci1[i]), np.asarray(loci2[j])))
 
     return similarloci
