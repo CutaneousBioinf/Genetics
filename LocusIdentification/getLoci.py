@@ -48,22 +48,25 @@ def getLoci(threshold, path, gap, chromosome, outputfile):
     rows = np.shape(significantMarkers)[0]
     # gets loci from each chromosome, and puts them in array
     significantLocus = [0, 0, 0]
-    currentChromosome = 1
+    currentChromosome = significantMarkers[0][2]
     # set initial p value to a large number
     p_val = 1
     for i in range(1, rows):
         prevPosition = significantMarkers[i - 1][0]
         position = significantMarkers[i][0]
 
-        if (abs(prevPosition - position) >= gap and significantMarkers[i][1] == currentChromosome and
-            significantMarkers[i][2] < p_val) or significantMarkers[i][1] != currentChromosome:
-            significantLocus = significantMarkers[i, :]
+        # skip marker if p value is not present
+        if significantMarkers[i][2] == "N/A":
+            continue
 
-        if significantMarkers[i][1] != currentChromosome:
+        if significantMarkers[i][1] != currentChromosome and abs(prevPosition - position) > gap:
             currentChromosome = significantMarkers[i][1]
             p_val = 1
+            significantLoci.append(significantLocus)
 
-        significantLoci.append(significantLocus)
+        if significantMarkers[i][2] < p_val:
+            significantLocus = significantMarkers[i, :]
+            p_val = significantMarkers[i][2]
 
     sys.stderr.write("Loci identified.\n")
 
@@ -76,10 +79,12 @@ def getLoci(threshold, path, gap, chromosome, outputfile):
 def testcases(significantMarkers, significantLocus):
     # one chromosome
     assert (significantMarkers[0][1] == significantMarkers[-1][1])
+
     # one of the chromosomes only contains one marker
     assert (len(significantMarkers) == 1)
+
     # non numeric chromosomes
-    # p value is N/A
+    assert (type(significantMarkers[0][1]) != int)
 
 
 def main():
