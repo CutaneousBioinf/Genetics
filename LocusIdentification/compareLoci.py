@@ -28,4 +28,4 @@ def compareLoci(path1, path2, gap):
 
 
 if __name__ == "__main__":
-    print(compareLoci("loci.csv", "loci.csv"))
+    print(compareLoci("loci.csv", "loci.csv", 50000))

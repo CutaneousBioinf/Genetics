@@ -12,11 +12,12 @@ import sys
               help='chromosome to analyze, enter 0 to get all chromosome data. 0 by default')
 @click.option('--path', default="data.txt", help='.txt file to analyze')
 @click.option('--threshold', default=0.5, help='p_value threshold')
-@click.option('--gap', default=500000)
-@click.option('--outputfile', default=" ")
+@click.option('--gap', default=50000)
+@click.option('--outputfile', default="loci.csv")
 def getLoci(threshold, path, gap, chromosome, outputfile):
     # process file into csv dataframe
     df = pd.read_csv(path, delimiter='	')
+    df = df[pd.to_numeric(df['p_value'], errors='coerce').notnull()]
     sys.stderr.write("File parsed.\n")
 
     # isolate p values, chr, and pos columns
@@ -31,12 +32,14 @@ def getLoci(threshold, path, gap, chromosome, outputfile):
     significantMarkers = np.vstack((positions, chromosomes, p_vals))
     # transposes data, so that it is easier to sort, filter, and put into csv.
     significantMarkers = np.transpose(significantMarkers)
+
     # positions stay sorted in place
-    significantMarkers = significantMarkers[significantMarkers[0].argsort()]
-    significantMarkers = significantMarkers[significantMarkers[1].argsort()]
+    significantMarkers = significantMarkers[significantMarkers[:, 0].argsort()]
+    # sort by chromosome
+    significantMarkers = significantMarkers[significantMarkers[:, 1].argsort()]
 
     # filtering by p value
-    significantMarkers = significantMarkers[:, significantMarkers[2] <= threshold]
+    significantMarkers = significantMarkers[np.any(significantMarkers <= threshold, axis=1), :]
 
     # filtering by chromosome
     if chromosome != 0:
@@ -46,8 +49,9 @@ def getLoci(threshold, path, gap, chromosome, outputfile):
 
     significantLoci = []
     rows = np.shape(significantMarkers)[0]
+
     # gets loci from each chromosome, and puts them in array
-    significantLocus = [0, 0, 0]
+    significantLocus = significantMarkers[0]
     currentChromosome = significantMarkers[0][2]
     # set initial p value to a large number
     p_val = 1
@@ -55,16 +59,12 @@ def getLoci(threshold, path, gap, chromosome, outputfile):
         prevPosition = significantMarkers[i - 1][0]
         position = significantMarkers[i][0]
 
-        # skip marker if p value is not present
-        if significantMarkers[i][2] == "N/A":
-            continue
-
-        if significantMarkers[i][1] != currentChromosome and abs(prevPosition - position) > gap:
+        if significantMarkers[i][1] != currentChromosome or position - prevPosition > gap:
             currentChromosome = significantMarkers[i][1]
             p_val = 1
             significantLoci.append(significantLocus)
 
-        if significantMarkers[i][2] < p_val:
+        if significantMarkers[i][2] <= p_val:
             significantLocus = significantMarkers[i, :]
             p_val = significantMarkers[i][2]
 
@@ -73,23 +73,26 @@ def getLoci(threshold, path, gap, chromosome, outputfile):
     final_df = pd.DataFrame(data=significantLoci, columns=["pos", "chr", "p_value"])
     final_df.to_csv(outputfile) if outputfile != " " else print(final_df)
     sys.stderr.write("Output file created.\n")
-    return significantMarkers, significantLoci
+    return significantLoci
 
 
-def testcases(significantMarkers, significantLocus):
+def testcases():
     # one chromosome
-    assert (significantMarkers[0][1] == significantMarkers[-1][1])
+    significantLoci = getLoci(0.5, "oneChr.txt", 50000, 6, " ")
+    assert (significantLoci[0][1] == significantLoci[-1][1])
 
     # one of the chromosomes only contains one marker
-    assert (len(significantMarkers) == 1)
+    significantLoci = getLoci(0.5, "oneMarker.txt", 50000, 0, " ")
+    assert (len(significantLoci) == 1)
 
-    # non numeric chromosomes
-    assert (type(significantMarkers[0][1]) != int)
+    # non numeric p-val
+    significantLoci = getLoci(0.5, "nonNumericP.txt.txt", 50000, 0, " ")
+    assert (type(significantLoci[0][1]) == int)
 
 
 def main():
-    significantMarkers, significantLocus = getLoci()
-    testcases(significantMarkers, significantLocus)
+    significantLoci = getLoci()
+    testcases()
 
 
 if __name__ == "__main__":
