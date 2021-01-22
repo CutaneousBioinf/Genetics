@@ -12,11 +12,12 @@ import sys
               help='chromosome to analyze, enter 0 to get all chromosome data. 0 by default')
 @click.option('--path', default="data.txt", help='.txt file to analyze')
 @click.option('--threshold', default=0.5, help='p_value threshold')
-@click.option('--gap', default=500000)
-@click.option('--outputfile', default=" ")
+@click.option('--gap', default=50000)
+@click.option('--outputfile', default="loci.csv")
 def getLoci(threshold, path, gap, chromosome, outputfile):
     # process file into csv dataframe
     df = pd.read_csv(path, delimiter='	')
+    df = df[pd.to_numeric(df['p_value'], errors='coerce').notnull()]
     sys.stderr.write("File parsed.\n")
 
     # isolate p values, chr, and pos columns
@@ -31,12 +32,14 @@ def getLoci(threshold, path, gap, chromosome, outputfile):
     significantMarkers = np.vstack((positions, chromosomes, p_vals))
     # transposes data, so that it is easier to sort, filter, and put into csv.
     significantMarkers = np.transpose(significantMarkers)
+
     # positions stay sorted in place
-    significantMarkers = significantMarkers[significantMarkers[0].argsort()]
-    significantMarkers = significantMarkers[significantMarkers[1].argsort()]
+    significantMarkers = significantMarkers[significantMarkers[:, 0].argsort()]
+    # sort by chromosome
+    significantMarkers = significantMarkers[significantMarkers[:, 1].argsort()]
 
     # filtering by p value
-    significantMarkers = significantMarkers[:, significantMarkers[2] <= threshold]
+    significantMarkers = significantMarkers[np.any(significantMarkers <= threshold, axis=1), :]
 
     # filtering by chromosome
     if chromosome != 0:
@@ -44,65 +47,52 @@ def getLoci(threshold, path, gap, chromosome, outputfile):
 
     sys.stderr.write("Data sorted and filtered.\n")
 
-    # finds the loci if a specific chromosome is defined
     significantLoci = []
     rows = np.shape(significantMarkers)[0]
-    if chromosome != 0:
-        currentSignificantMarker = [0, 0, 0]
-        for i in range(1, rows):
-            prevPosition = significantMarkers[i - 1][0]
-            position = significantMarkers[i][0]
-            if abs(prevPosition - position) >= gap and significantMarkers[i][2] < currentSignificantMarker[2]:  # p
-                # value inequality
-                currentSignificantMarker = significantMarkers[i, :]
-
-        significantLoci.append(currentSignificantMarker)
 
     # gets loci from each chromosome, and puts them in array
-    else:
-        significantLocus = [0, 0, 0]
-        currentChromosome = 1
-        for i in range(1, rows):
-            prevPosition = significantMarkers[i - 1][0]
-            position = significantMarkers[i][0]
+    significantLocus = significantMarkers[0]
+    currentChromosome = significantMarkers[0][2]
+    # set initial p value to a large number
+    p_val = 1
+    for i in range(1, rows):
+        prevPosition = significantMarkers[i - 1][0]
+        position = significantMarkers[i][0]
 
-            if significantMarkers[i][1] != currentChromosome:
-                currentChromosome += 1
+        if significantMarkers[i][1] != currentChromosome or position - prevPosition > gap:
+            currentChromosome = significantMarkers[i][1]
+            p_val = 1
+            significantLoci.append(significantLocus)
 
-            if abs(prevPosition - position) >= gap and significantMarkers[i][1] == currentChromosome:
-                significantLocus = significantMarkers[i, :]
-
-            # if there is not a significant loci for the current chromosome, add one
-            if significantLocus[2] < significantLoci[-1][2] and significantLoci[-1][1] == currentChromosome - 1:
-                significantLoci.append(significantLocus)
-            # else, edit the last loci in the significantLoci list
-            elif significantLocus[2] < significantLoci[-1][2] and significantLoci[-1][1] == currentChromosome:
-                significantLoci[-1] = significantLocus
+        if significantMarkers[i][2] <= p_val:
+            significantLocus = significantMarkers[i, :]
+            p_val = significantMarkers[i][2]
 
     sys.stderr.write("Loci identified.\n")
 
     final_df = pd.DataFrame(data=significantLoci, columns=["pos", "chr", "p_value"])
     final_df.to_csv(outputfile) if outputfile != " " else print(final_df)
     sys.stderr.write("Output file created.\n")
-    return significantMarkers, significantLoci
+    return significantLoci
 
 
-def testcases(significantMarkers, significantLocus):
-    # makes sure that there are at most 23 loci, one for each chromosome
-    assert len(significantLocus) <= 23
+def testcases():
+    # one chromosome
+    significantLoci = getLoci(0.5, "oneChr.txt", 50000, 6, " ")
+    assert (significantLoci[0][1] == significantLoci[-1][1])
 
-    # There can never be more loci than markers
-    assert len(significantMarkers) >= len(significantLocus)
+    # one of the chromosomes only contains one marker
+    significantLoci = getLoci(0.5, "oneMarker.txt", 50000, 0, " ")
+    assert (len(significantLoci) == 1)
 
-    # true if positions are sorted
-    assert significantMarkers[0][0] < significantMarkers[0][1]
-
-    print(significantMarkers, significantLocus)
+    # non numeric p-val
+    significantLoci = getLoci(0.5, "nonNumericP.txt.txt", 50000, 0, " ")
+    assert (type(significantLoci[0][1]) == int)
 
 
 def main():
-    significantMarkers, significantLocus = getLoci()
-    testcases(significantMarkers, significantLocus)
+    significantLoci = getLoci()
+    testcases()
 
 
 if __name__ == "__main__":
