@@ -498,6 +498,26 @@ int main(int argc, char** argv) {
 }
 */
 
+// File functions
+void get_rsid_file(const string &filename, const string &source) {
+	ifstream file;
+	file.open(filename);
+	string rsid;
+	while (file >> rsid) {
+		get_rsid(source.c_str(), rsid.c_str());
+	}
+	file.close();
+}
+
+void get_cpa_pointers_file(const string &filename, const string &source, const string &table) {
+	ifstream file;
+	file.open(filename);
+	string chr, pos, allele_seq;
+	while (file >> chr >> pos >> allele_seq) {
+		get_cpa_pointers(source.c_str(), table.c_str(), chr.c_str(), pos.c_str(), allele_seq.c_str());
+	}
+	file.close();
+}
 
 int main(int argc, char** argv) {
 	CLI::App app{"Genomic hash table lookup program"};
@@ -508,21 +528,29 @@ int main(int argc, char** argv) {
 	CLI::Option *table_option = app.add_option("-t,--table", table_name, "Path to hash table to be created or examined");
 	bool create = false, retrieve = false;
 	CLI::Option *create_flag = app.add_flag("-C,--create", create, "Create hash table")->needs(set_option)->needs(source_option)->needs(table_option);
-	CLI::Option *retrieve_flag = app.add_flag("-R,--retrieve", retrieve, "Retrieves a given rsID (starting with rs) or a chromosome/position/allele triplet separated by spaces")->needs(set_option)->needs(source_option)->needs(table_option);
+	CLI::Option *retrieve_flag = app.add_flag("-R,--retrieve", retrieve, "Retrieves a given rsID (starting with rs) or a chromosome/position/allele triplet separated by spaces")->needs(set_option)->needs(table_option);
+	string file_path = "";
+	CLI::Option *file_option = app.add_option("-f,--file", file_path, "Path to input file")->check(CLI::ExistingFile)->needs(retrieve_flag);
 	string rsid = "", chromosome = "", position = "", alleles = "";
 	CLI::Option *rsid_option = app.add_option("-r,--rsid", rsid, "rsID marker (format rsNNNNNNNNN)");
 	CLI::Option *chromosome_option = app.add_option("-c,--chromosome", rsid, "Chromosome (format chr{1,...,26,X,Y})");
 	CLI::Option *allele_option = app.add_option("-a,--allele", alleles, "Allele to be looked up");
 	CLI::Option *position_option = app.add_option("-p,--position", position, "Position to be looked up, indexed from 1");
 	CLI11_PARSE(app, argc, argv);
-	if (create)
+	if (create) {
 		if (type == "rsid")
 			create_rsid_table(source_name.c_str(), table_name.c_str());
 		else if (type == "cpa")
 			create_cpa_table_pointer(source_name.c_str(), table_name.c_str());
-	else if (retrieve)
-		if (type == "rsid")
-			get_rsid(table_name.c_str(), rsid.c_str());
-		else if (type == "cpa")
-			get_cpa_pointers(source_name.c_str(), table_name.c_str(), chromosome.c_str(), position.c_str(), alleles.c_str());
+	}
+	else if (retrieve) {
+		if (type == "rsid") {
+			if (file_path == "") cout << get_rsid(table_name.c_str(), rsid.c_str());
+			else get_rsid_file(file_path, table_name);
+		}
+		else if (type == "cpa") {
+			if (file_path == "") get_cpa_pointers(source_name.c_str(), table_name.c_str(), chromosome.c_str(), position.c_str(), alleles.c_str());
+			else get_cpa_pointers_file(file_path, source_name, table_name);
+		}
+	}
 }
