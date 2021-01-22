@@ -6,6 +6,7 @@
 #include <cmath>
 
 #include <diskhash.hpp>
+#include "CLI11.hpp"
 using namespace std;
 using namespace dht;
 
@@ -429,6 +430,7 @@ int get_cpa_pointers(const char *data_file_name, const char *rsid_table_name, co
 }
 
 // Command line interface
+/*
 int main(int argc, char** argv) {
 	string main_command = "";
 	if (argc >= 2) {
@@ -493,4 +495,34 @@ int main(int argc, char** argv) {
 		cout << "get_rsid [source_dht] [rsid]" << endl;
 	}
 	return 0;
+}
+*/
+
+
+int main(int argc, char** argv) {
+	CLI::App app{"Genomic hash table lookup program"};
+	string type = "";
+	CLI::Option *set_option = app.add_set("-k,--kind", type, {"rsid", "cpa"}, "Kind of creation or lookup (rsID or chromosome/position/allele)");
+	string table_name = "", source_name = "";
+	CLI::Option *source_option = app.add_option("-s,--source", source_name, "Path to source data file used for hash table creation")->check(CLI::ExistingFile);
+	CLI::Option *table_option = app.add_option("-t,--table", table_name, "Path to hash table to be created or examined");
+	bool create = false, retrieve = false;
+	CLI::Option *create_flag = app.add_flag("-C,--create", create, "Create hash table")->needs(set_option)->needs(source_option)->needs(table_option);
+	CLI::Option *retrieve_flag = app.add_flag("-R,--retrieve", retrieve, "Retrieves a given rsID (starting with rs) or a chromosome/position/allele triplet separated by spaces")->needs(set_option)->needs(source_option)->needs(table_option);
+	string rsid = "", chromosome = "", position = "", alleles = "";
+	CLI::Option *rsid_option = app.add_option("-r,--rsid", rsid, "rsID marker (format rsNNNNNNNNN)");
+	CLI::Option *chromosome_option = app.add_option("-c,--chromosome", rsid, "Chromosome (format chr{1,...,26,X,Y})");
+	CLI::Option *allele_option = app.add_option("-a,--allele", alleles, "Allele to be looked up");
+	CLI::Option *position_option = app.add_option("-p,--position", position, "Position to be looked up, indexed from 1");
+	CLI11_PARSE(app, argc, argv);
+	if (create)
+		if (type == "rsid")
+			create_rsid_table(source_name.c_str(), table_name.c_str());
+		else if (type == "cpa")
+			create_cpa_table_pointer(source_name.c_str(), table_name.c_str());
+	else if (retrieve)
+		if (type == "rsid")
+			get_rsid(table_name.c_str(), rsid.c_str());
+		else if (type == "cpa")
+			get_cpa_pointers(source_name.c_str(), table_name.c_str(), chromosome.c_str(), position.c_str(), alleles.c_str());
 }
