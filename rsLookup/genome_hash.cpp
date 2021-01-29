@@ -201,6 +201,16 @@ bool is_snp(const string &alleles_str) {
 	return alleles.size() > 0;
 }
 
+// Check if user inDEL input matches short form marker in source file
+bool is_indel_shortform(const string &user_input, const vector<string> &marker_split) {
+	if (marker_split.size() != 2) return false;
+	if (marker_split[0].length() >= marker_split[1].length()) return false;
+	if (marker_split[0] == marker_split[1].substr(0, marker_split[0].length())) {
+		return user_input == "-/" + marker_split[1].substr(marker_split[0].length(), marker_split[1].length() - marker_split[0].length());
+	}
+	return false;
+}
+
 string canonical_alleles(const string &alleles_str) {
 	if (alleles_str == "" || alleles_str.find("/") == string::npos) return "";
 	vector<string> alleles = str_split(alleles_str, '/');
@@ -319,15 +329,12 @@ int create_cpa_table_pointer(const char *source_name, const char* rsid_table_nam
 		string chromosome_key = chromosome_to_key(chromosome);
 		string startpos = tsv[startpos_col];
 		string rsid_str = tsv[rsid_col];
-		if (rsid_str.length() - 2 > max_rsid_length) {
-			max_rsid_length = rsid_str.length() - 2;
-		}
 		string ref_allele = tsv[ref_allele_col];
 		string alleles = tsv[alleles_col];
 		string c_alleles = canonical_alleles(alleles);
 		string rsid_num = rsid_str.substr(2, rsid_str.length());
 		string b_key = "";
-		if (is_snp(alleles)) {
+		if (true) {
 			if (prev_chromosome != chromosome || prev_position != startpos) {
 				s_file << line_break;
 				b_key = "sc" + chromosome_key + "_" + startpos;
@@ -344,8 +351,6 @@ int create_cpa_table_pointer(const char *source_name, const char* rsid_table_nam
 	s_file << line_break;
 	file.close();
 	s_file.close();
-	cout << "Max RSID length (excluding rs): " << max_rsid_length << endl;
-	cout << "Max content length: " << max_content_length << endl;
 	return 0;
 }
 
@@ -396,7 +401,7 @@ int get_cpa(const char *rsid_table_name, const char * chromosome_c, const char *
 }
 
 // Look up chromosome/position/alleles and print RSID(s) [pointer version]
-int get_cpa_pointers(const char *data_file_name, const char *rsid_table_name, const char * chromosome_c, const char *position_c, const char *allele_c) {
+int get_cpa_pointers(const char *data_file_name, const char *rsid_table_name, const char * chromosome_c, const char *position_c, const char *allele_c, ostream *log_file) {
 	DiskHash<size_t> ht(rsid_table_name, key_maxlen_big, dht::DHOpenRO);
 	ifstream file;
 	file.open(string(rsid_table_name) + ".data");
@@ -419,9 +424,12 @@ int get_cpa_pointers(const char *data_file_name, const char *rsid_table_name, co
 		vector<string> alleles = str_split(pieces[2*i + 1], '/');
 		vector<string> complement = get_complement(alleles);
 		string rsid_num = pieces[2*i];
-		if (is_subset(alleles_in, alleles) || is_subset(alleles_in, complement)) {
+		if (pieces[2*i + 1] == allele || is_subset(alleles_in, alleles) || is_subset(alleles_in, complement) || is_indel_shortform(allele, alleles_in)) {
 			cout << rsid_num << endl;
 			++found;
+		}
+		else {
+			if (log_file) *(log_file) << chromosome << " " << (position + 1) << " did not match with input " << allele << endl;
 		}
 	}
 	file.close();
@@ -509,12 +517,12 @@ void get_rsid_file(const string &filename, const string &source) {
 	file.close();
 }
 
-void get_cpa_pointers_file(const string &filename, const string &source, const string &table) {
+void get_cpa_pointers_file(const string &filename, const string &source, const string &table, ostream *log_file) {
 	ifstream file;
 	file.open(filename);
 	string chr, pos, allele_seq;
 	while (file >> chr >> pos >> allele_seq) {
-		get_cpa_pointers(source.c_str(), table.c_str(), chr.c_str(), pos.c_str(), allele_seq.c_str());
+		get_cpa_pointers(source.c_str(), table.c_str(), chr.c_str(), pos.c_str(), allele_seq.c_str(), log_file);
 	}
 	file.close();
 }
@@ -536,7 +544,18 @@ int main(int argc, char** argv) {
 	CLI::Option *chromosome_option = app.add_option("-c,--chromosome", rsid, "Chromosome (format chr{1,...,26,X,Y})");
 	CLI::Option *allele_option = app.add_option("-a,--allele", alleles, "Allele to be looked up");
 	CLI::Option *position_option = app.add_option("-p,--position", position, "Position to be looked up, indexed from 1");
+	string log_name = "";
+	bool log_err = false;
+	CLI::Option *log_file_option = app.add_option("-l,--log-file", log_name, "Specifies the location of a log file to contain entries of a given chromosome and position that do not match the allele input");
+	CLI::Option *log_err_option = app.add_flag("-e,--log-stderr", log_err, "Log to stderr the entries of a given chromosome and position that do not match the allele input");
 	CLI11_PARSE(app, argc, argv);
+	ostream *log_file = nullptr;
+	ofstream log_stream;
+	if (log_name.length() > 0) {
+		log_stream.open(log_name);
+		log_file = &log_stream;
+	}
+	else if (log_err) log_file = &cerr;
 	if (create) {
 		if (type == "rsid")
 			create_rsid_table(source_name.c_str(), table_name.c_str());
@@ -549,8 +568,8 @@ int main(int argc, char** argv) {
 			else get_rsid_file(file_path, table_name);
 		}
 		else if (type == "cpa") {
-			if (file_path == "") get_cpa_pointers(source_name.c_str(), table_name.c_str(), chromosome.c_str(), position.c_str(), alleles.c_str());
-			else get_cpa_pointers_file(file_path, source_name, table_name);
+			if (file_path == "") get_cpa_pointers(source_name.c_str(), table_name.c_str(), chromosome.c_str(), position.c_str(), alleles.c_str(), log_file);
+			else get_cpa_pointers_file(file_path, source_name, table_name, log_file);
 		}
 	}
 }
