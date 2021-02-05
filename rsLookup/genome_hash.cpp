@@ -34,6 +34,7 @@ const int alleles_col = 9;
 
 // rsID hash table maximum key length
 const int key_maxlen = 15;
+const int key_maxlen_big = 20;
 
 
 // Check if string in list
@@ -215,7 +216,7 @@ bool is_indel_shortform(const string &user_input, const vector<string> &marker_s
 int create_cpa_table_pointer(const char *source_name, const char* rsid_table_name, bool include_all, ostream *log_file) {
 	// Create diskhash file plus a text file with ".data" appended to filename
 	// The diskhash will point to locations in the .data file.
-	DiskHash<size_t> ht(rsid_table_name, key_maxlen, dht::DHOpenRW);
+	DiskHash<size_t> ht(rsid_table_name, key_maxlen_big, dht::DHOpenRW);
 	string line;
 	ifstream file;
 	file.open(string(source_name));
@@ -295,7 +296,7 @@ int get_rsid(const char *rsid_table_name, const char* rsid_param, ostream *log_f
 
 // Look up chromosome/position/alleles and print RSID(s) [pointer version]
 int get_cpa_pointers(const char *data_file_name, const char *rsid_table_name, const char * chromosome_c, const char *position_c, const char *allele_c, ostream *log_file) {
-	DiskHash<size_t> ht(rsid_table_name, key_maxlen, dht::DHOpenRO);
+	DiskHash<size_t> ht(rsid_table_name, key_maxlen_big, dht::DHOpenRO);
 	ifstream file;
 	file.open(string(rsid_table_name) + ".data");
 	string chromosome(chromosome_c);
