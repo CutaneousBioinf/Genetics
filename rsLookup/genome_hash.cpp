@@ -5,7 +5,7 @@
 #include <fstream>
 #include <cmath>
 
-#include <diskhash.hpp>
+#include "diskhash/diskhash.hpp"
 #include "CLI11.hpp"
 using namespace std;
 using namespace dht;
@@ -106,7 +106,7 @@ vector<string> str_split(const std::string& str, char delim = ' ')
 }
 
 // Creates the hash table from the tab-separated file using RSID number string as key
-int create_rsid_table(const char *source_name, const char* rsid_table_name) {
+int create_rsid_table(const char *source_name, const char* rsid_table_name, ostream *log_file) {
 	DiskHash<SNPData> ht(rsid_table_name, key_maxlen, dht::DHOpenRW);
 	string line;
 	ifstream file;
@@ -131,22 +131,13 @@ int create_rsid_table(const char *source_name, const char* rsid_table_name) {
 		if (stored_data.length() > max_content_length) {
 			max_content_length = stored_data.length();
 		}
-		if (stored_data.length() > MAX_DATA_LENGTH) {
-			cout << "ERROR: Maximum length exceeded, encountered string of length " << stored_data.length() << endl;
-		}
 		char stored_arr[MAX_DATA_LENGTH] = {};
 		strcpy(stored_arr, stored_data.c_str());
 		strcpy(item.data, stored_arr);
 		const char *rsid_num_part = rsid_str.substr(2, rsid_str.length()).c_str();
-		cout << "adding " << rsid_str << "..." << endl;
 		const bool inserted = ht.insert(rsid_num_part, item);
-		if (!inserted) {
-			cout << "[already in table]" << endl;
-		}
 	}
 	file.close();
-	cout << "Max RSID length (excluding rs): " << max_rsid_length << endl;
-	cout << "Max content length: " << max_content_length << endl;
 	return 0;
 }
 
@@ -169,17 +160,37 @@ string chromosome_to_key(string chromosome) {
 }
 
 // Returns whether string s is allele (A, C, T, G)
-bool is_allele(string s) {
+bool is_allele_letter(const string &s) {
 	return s == "A" || s == "C" || s == "G" || s == "T";
 }
 
+// Check for valid allele sequence
+bool is_allele(const string &s) {
+	if (s.length() == 0) return false;
+	for (size_t i = 0; i < s.length(); ++i) {
+		string c(1, s[i]);
+		if (!is_allele_letter(c)) return false;
+	}
+	return true;
+}
+
 // Get complement of allele (A->T, C->G)
-string get_complement(string allele) {
+string get_complement_letter(string allele) {
 	if (allele == "A") return "T";
 	else if (allele == "C") return "G";
 	else if (allele == "G") return "C";
 	else if (allele == "T") return "A";
 	else return "";
+}
+
+// Get complement of allele
+string get_complement(const string &allele) {
+	string complement = "";
+	for (size_t i = 0; i < allele.length(); ++i) {
+		string c(1, allele[i]);
+		complement += get_complement_letter(c);
+	}
+	return complement;
 }
 
 vector<string> get_complement(const vector<string> &alleles) {
@@ -199,6 +210,13 @@ bool is_snp(const string &alleles_str) {
 	}
 	// if (alleles.size() > 0) cout << "true " << join_str(alleles, "/");
 	return alleles.size() > 0;
+}
+
+// Check if allele sequence is basic indel 
+bool is_indel(const string &alleles_str) {
+	if (alleles_str == "" || alleles_str.find("/") == string::npos) return false;
+	vector<string> alleles = str_split(alleles_str, '/');
+	return alleles.size() == 2 && alleles[0] == "-" && is_allele(alleles[1]);
 }
 
 // Check if user inDEL input matches short form marker in source file
@@ -306,7 +324,7 @@ int create_cpa_table(const char *source_name, const char* rsid_table_name) {
 }
 
 
-int create_cpa_table_pointer(const char *source_name, const char* rsid_table_name) {
+int create_cpa_table_pointer(const char *source_name, const char* rsid_table_name, bool include_all, ostream *log_file) {
 	DiskHash<size_t> ht(rsid_table_name, key_maxlen_big, dht::DHOpenRW);
 	string line;
 	ifstream file;
@@ -334,7 +352,8 @@ int create_cpa_table_pointer(const char *source_name, const char* rsid_table_nam
 		string c_alleles = canonical_alleles(alleles);
 		string rsid_num = rsid_str.substr(2, rsid_str.length());
 		string b_key = "";
-		if (true) {
+		if (include_all || 
+		(is_snp(alleles) || is_indel(alleles))) {
 			if (prev_chromosome != chromosome || prev_position != startpos) {
 				s_file << line_break;
 				b_key = "sc" + chromosome_key + "_" + startpos;
@@ -347,6 +366,10 @@ int create_cpa_table_pointer(const char *source_name, const char* rsid_table_nam
 			else s_file << "\t";
 			s_file << rsid_str << "\t" << alleles;
 		}
+		else {
+			if (log_file)
+				(*log_file) << "Excluded " << rsid_str << " " << chromosome << " " << startpos << " " << alleles << endl;
+		}
 	}
 	s_file << line_break;
 	file.close();
@@ -355,8 +378,8 @@ int create_cpa_table_pointer(const char *source_name, const char* rsid_table_nam
 }
 
 
-// Gets the RSID from the hash table and prints to standard out the chromosome, starting position, and alleles
-int get_rsid(const char *rsid_table_name, const char* rsid_param) {
+// Gets the rsID from the hash table and prints to standard out the chromosome, starting position, and alleles
+int get_rsid(const char *rsid_table_name, const char* rsid_param, ostream *log_file) {
 	if (!(strlen(rsid_param) > 2 && tolower(rsid_param[0]) == 'r' && tolower(rsid_param[1]) == 's')) {
 		cout << "Invalid RSID requested" << endl;
 		return 1;
@@ -370,6 +393,8 @@ int get_rsid(const char *rsid_table_name, const char* rsid_param) {
 		cout << member->data << endl;
 	}
 	else {
+		if (log_file)
+			(*log_file) << rsid << " not found" << endl;
 		cout << "ERROR: The given RSID was not found" << endl;
 		return 1;
 	}
@@ -507,12 +532,12 @@ int main(int argc, char** argv) {
 */
 
 // File functions
-void get_rsid_file(const string &filename, const string &source) {
+void get_rsid_file(const string &filename, const string &source, ostream *log_file) {
 	ifstream file;
 	file.open(filename);
 	string rsid;
 	while (file >> rsid) {
-		get_rsid(source.c_str(), rsid.c_str());
+		get_rsid(source.c_str(), rsid.c_str(), log_file);
 	}
 	file.close();
 }
@@ -548,6 +573,8 @@ int main(int argc, char** argv) {
 	bool log_err = false;
 	CLI::Option *log_file_option = app.add_option("-l,--log-file", log_name, "Specifies the location of a log file to contain entries of a given chromosome and position that do not match the allele input");
 	CLI::Option *log_err_option = app.add_flag("-e,--log-stderr", log_err, "Log to stderr the entries of a given chromosome and position that do not match the allele input");
+	bool include_all = false;
+	CLI::Option *all_option = app.add_flag("-A,--all", include_all, "Include all markers in reverse map, not just recognized ones");
 	CLI11_PARSE(app, argc, argv);
 	ostream *log_file = nullptr;
 	ofstream log_stream;
@@ -558,14 +585,14 @@ int main(int argc, char** argv) {
 	else if (log_err) log_file = &cerr;
 	if (create) {
 		if (type == "rsid")
-			create_rsid_table(source_name.c_str(), table_name.c_str());
+			create_rsid_table(source_name.c_str(), table_name.c_str(), log_file);
 		else if (type == "cpa")
-			create_cpa_table_pointer(source_name.c_str(), table_name.c_str());
+			create_cpa_table_pointer(source_name.c_str(), table_name.c_str(), include_all, log_file);
 	}
 	else if (retrieve) {
 		if (type == "rsid") {
-			if (file_path == "") cout << get_rsid(table_name.c_str(), rsid.c_str());
-			else get_rsid_file(file_path, table_name);
+			if (file_path == "") get_rsid(table_name.c_str(), rsid.c_str(), log_file);
+			else get_rsid_file(file_path, table_name, log_file);
 		}
 		else if (type == "cpa") {
 			if (file_path == "") get_cpa_pointers(source_name.c_str(), table_name.c_str(), chromosome.c_str(), position.c_str(), alleles.c_str(), log_file);
