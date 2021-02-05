@@ -1,13 +1,15 @@
 DEFAULT_GOAL = release
-CXXFLAGS_DEBUG = -ldht -g
-CXXFLAGS_RELEASE = -ldht -o3
+CXXFLAGS_DEBUG = -g
+CXXFLAGS_RELEASE = -o3
 
 # Compile the main executable
 release: genome_hash.cpp
-	g++ $(CXXFLAGS_RELEASE) genome_hash.cpp -o rsLookup
+	@$(MAKE) -C diskhash
+	g++ $(CXXFLAGS_RELEASE) diskhash/diskhash.o genome_hash.cpp -o rsLookup
 
 debug:
-	g++ $(CXXFLAGS_DEBUG) genome_hash.cpp -o rsLookup
+	@$(MAKE) -C diskhash
+	g++ $(CXXFLAGS_DEBUG) diskhash/diskhash.o genome_hash.cpp -o rsLookup
 
 
 # Remove automatically generated files
