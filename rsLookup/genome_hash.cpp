@@ -309,21 +309,23 @@ int get_cpa_pointers(const char *data_file_name, const char *rsid_table_name, co
 		cout << "No matches found" << endl;;
 		return 1;
 	}
+	// Use seekg to go to pointed-to position, which is the beginning of a line read with getline
 	size_t *item = ht.lookup(snp_b_key.c_str());
 	string line;
 	file.seekg(*item);
 	getline(file, line);
 	vector<string> pieces = str_split(line, '\t');
+	// Loop through tab-separated values
 	for (int i = 0; i < pieces.size() / 2; ++i) {
 		vector<string> alleles = str_split(pieces[2*i + 1], '/');
 		vector<string> complement = get_complement(alleles);
 		string rsid_num = pieces[2*i];
-		if (pieces[2*i + 1] == allele || is_subset(alleles_in, alleles) || is_subset(alleles_in, complement) || is_indel_shortform(allele, alleles_in)) {
+		if (pieces[2*i + 1] == allele || is_subset(alleles_in, alleles) || is_subset(alleles_in, complement) || is_indel_shortform(pieces[2*i + 1], alleles_in)) {
 			cout << rsid_num << "\t" << chromosome << "\t" << position << "\t" << allele << endl;
 			++found;
 		}
 		else {
-			if (log_file) *(log_file) << chromosome << " " << (position + 1) << " did not match with input " << allele << endl;
+			if (log_file) *(log_file) << chromosome << " " << (position + 1) << " " << pieces[2*i + 1] << " did not match with input " << allele << endl;
 		}
 	}
 	file.close();
@@ -369,7 +371,7 @@ int main(int argc, char** argv) {
 	CLI::Option *file_option = app.add_option("-f,--file", file_path, "Path to input file")->check(CLI::ExistingFile)->needs(retrieve_flag);
 	string rsid = "", chromosome = "", position = "", alleles = "";
 	CLI::Option *rsid_option = app.add_option("-r,--rsid", rsid, "rsID marker (format rsNNNNNNNNN)");
-	CLI::Option *chromosome_option = app.add_option("-c,--chromosome", rsid, "Chromosome (format chr{1,...,26,X,Y})");
+	CLI::Option *chromosome_option = app.add_option("-c,--chromosome", chromosome, "Chromosome (format chr{1,...,26,X,Y})");
 	CLI::Option *allele_option = app.add_option("-a,--allele", alleles, "Allele to be looked up");
 	CLI::Option *position_option = app.add_option("-p,--position", position, "Position to be looked up, indexed from 1");
 	string log_name = "";
