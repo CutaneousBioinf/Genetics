@@ -23,4 +23,6 @@ def fishersExactTest(binaryFile, alternative):
 
     contingency = np.array([[firstBEDnumones, BEDnumones], [firstBEDnumzeros, BEDnumzeros]])
 
-    stats.fisher_exact(contingency, alternative)
+    p_value, oddsratio = stats.fisher_exact(contingency, alternative)
+
+    return p_value
