@@ -14,8 +14,8 @@ def convert(markersFile, filenames):
     with open(markersFile) as f:
         for line in f:
             L = line.strip().split()
-            chromosomes.append(L[1])
-            positions.append(L[0])
+            chromosomes.append(L[0])
+            positions.append(L[1])
 
     # Read through each remaining BED file
     for file in filenames:
@@ -23,12 +23,11 @@ def convert(markersFile, filenames):
 
             # Add filename to header.
             headers.append(file)
-            binary = []
             for line in f:
                 L = line.strip().split()
 
-                # TODO: Figure out how to account for differing column sizes
                 for i in range(0, len(chromosomes)):
+                    binary = []
                     # If the chromosomes being currently compared are the same, continue
                     if int(L[0]) == chromosomes[i]:
                         # If the positions of the chromosomes are overlapping, then append "1".
@@ -37,7 +36,7 @@ def convert(markersFile, filenames):
                         else:
                             binary.append(0)
                     else:
-                        binary.append("n/a")
+                        binary.append(0)
             # Add binary data from this BED file to the "master" matrix.
             binaryData.append(binary)
 
