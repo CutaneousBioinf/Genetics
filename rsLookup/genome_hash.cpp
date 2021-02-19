@@ -375,9 +375,9 @@ int main(int argc, char** argv) {
 	CLI::Option *allele_option = app.add_option("-a,--allele", alleles, "Allele to be looked up");
 	CLI::Option *position_option = app.add_option("-p,--position", position, "Position to be looked up, indexed from 1");
 	string log_name = "";
-	bool log_err = false;
+	bool quiet = false;
 	CLI::Option *log_file_option = app.add_option("-l,--log-file", log_name, "Specifies the location of a log file to contain entries of a given chromosome and position that do not match the allele input");
-	CLI::Option *log_err_option = app.add_flag("-e,--log-stderr", log_err, "Log to stderr the entries of a given chromosome and position that do not match the allele input");
+	CLI::Option *quiet_option = app.add_flag("-q,--quiet", quiet, "Quiet mode");
 	bool include_all = false;
 	CLI::Option *all_option = app.add_flag("-A,--all", include_all, "Include all markers in reverse map, not just recognized ones");
 	CLI11_PARSE(app, argc, argv);
@@ -387,7 +387,7 @@ int main(int argc, char** argv) {
 		log_stream.open(log_name);
 		log_file = &log_stream;
 	}
-	else if (log_err) log_file = &cerr;
+	else if (!quiet) log_file = &cerr;
 	if (create) {
 		if (type == "rsid")
 			create_rsid_table(source_name.c_str(), table_name.c_str(), log_file);
@@ -403,5 +403,10 @@ int main(int argc, char** argv) {
 			if (file_path == "") get_cpa_pointers(source_name.c_str(), table_name.c_str(), chromosome.c_str(), position.c_str(), alleles.c_str(), log_file);
 			else get_cpa_pointers_file(file_path, source_name, table_name, log_file);
 		}
+	}
+	else {
+		int help_argc = 2;
+		const char *help_argv[2] = {"rsLookup", "-h"};
+		CLI11_PARSE(app, help_argc, help_argv);
 	}
 }
