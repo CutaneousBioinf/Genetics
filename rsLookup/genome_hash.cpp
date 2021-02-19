@@ -199,7 +199,7 @@ bool is_snp(const string &alleles_str) {
 bool is_indel(const string &alleles_str) {
 	if (alleles_str == "" || alleles_str.find("/") == string::npos) return false;
 	vector<string> alleles = str_split(alleles_str, '/');
-	return alleles.size() == 2 && alleles[0] == "-" && is_allele(alleles[1]);
+	return alleles.size() >= 2 && alleles.size() <= 3 && alleles[0] == "-" && is_allele(alleles[1]) && (alleles.size() < 3 || is_allele(alleles[2]));
 }
 
 // Check if user inDEL input matches short form marker in source file
@@ -320,8 +320,10 @@ int get_cpa_pointers(const char *data_file_name, const char *rsid_table_name, co
 		vector<string> alleles = str_split(pieces[2*i + 1], '/');
 		vector<string> complement = get_complement(alleles);
 		string rsid_num = pieces[2*i];
-		if (pieces[2*i + 1] == allele || is_subset(alleles_in, alleles) || is_subset(alleles_in, complement) || is_indel_shortform(pieces[2*i + 1], alleles_in)) {
-			cout << rsid_num << "\t" << chromosome << "\t" << position << "\t" << allele << endl;
+		if (allele == "" || pieces[2*i + 1] == allele || is_subset(alleles_in, alleles) || is_subset(alleles_in, complement) || is_indel_shortform(pieces[2*i + 1], alleles_in)) {
+			string print_allele = allele;
+			if (allele == "") print_allele = pieces[2*i + 1];
+			cout << rsid_num << "\t" << chromosome << "\t" << position << "\t" << print_allele << endl;
 			++found;
 		}
 		else {
