@@ -23,16 +23,16 @@ def convert(markersFile, filenames):
 
             # Add filename to header.
             headers.append(file)
-            for line in f:
-                L = line.strip().split()
-
-                for i in range(0, len(chromosomes)):
+            for i in range(0, len(chromosomes)):
+                for line in f:
+                    L = line.strip().split()
                     binary = []
                     # If the chromosomes being currently compared are the same, continue
                     if int(L[0]) == chromosomes[i]:
                         # If the positions of the chromosomes are overlapping, then append "1".
                         if isOverlapping(positions[i], [L[1], L[2]]):
                             binary.append(1)
+                            break
                         else:
                             binary.append(0)
                     else:
