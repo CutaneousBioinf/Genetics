@@ -203,13 +203,23 @@ bool is_indel(const string &alleles_str) {
 }
 
 // Check if user inDEL input matches short form marker in source file
-bool is_indel_shortform(const string &user_input, const vector<string> &marker_split) {
-	if (marker_split.size() != 2) return false;
-	if (marker_split[0].length() >= marker_split[1].length()) return false;
+int is_indel_shortform(const string &user_input, const vector<string> &marker_split) {
+	if (marker_split.size() != 2) return 0;
+	if (marker_split[0].length() >= marker_split[1].length()) return 0;
 	if (marker_split[0] == marker_split[1].substr(0, marker_split[0].length())) {
-		return user_input == "-/" + marker_split[1].substr(marker_split[0].length(), marker_split[1].length() - marker_split[0].length());
+		if (user_input == "-/" + marker_split[1].substr(marker_split[0].length(), marker_split[1].length() - marker_split[0].length()))
+			return marker_split[0].length();
 	}
-	return false;
+	return 0;
+}
+
+int indel_shortform_normalize(const vector<string> &marker_split) {
+	if (marker_split.size() != 2) return 0;
+	if (marker_split[0].length() >= marker_split[1].length()) return 0;
+	if (marker_split[0] == marker_split[1].substr(0, marker_split[0].length())) {
+		return marker_split[0].length();
+	}
+	return 0;
 }
 
 // Creates the reverse map from chromosome/position/allele to rsID
@@ -300,9 +310,9 @@ int get_cpa_pointers(const char *data_file_name, const char *rsid_table_name, co
 	ifstream file;
 	file.open(string(rsid_table_name) + ".data");
 	string chromosome(chromosome_c);
-	int position = atoi(position_c) - 1;
 	string allele(allele_c);
 	vector<string> alleles_in = str_split(allele, '/');
+	int position = atoi(position_c) - 1 + indel_shortform_normalize(alleles_in);
 	string snp_b_key = "sc" + chromosome_to_key(chromosome) + "_" + to_string(position);
 	int found = 0;
 	if (!ht.is_member(snp_b_key.c_str())) {
@@ -323,7 +333,7 @@ int get_cpa_pointers(const char *data_file_name, const char *rsid_table_name, co
 		if (allele == "" || pieces[2*i + 1] == allele || is_subset(alleles_in, alleles) || is_subset(alleles_in, complement) || is_indel_shortform(pieces[2*i + 1], alleles_in)) {
 			string print_allele = allele;
 			if (allele == "") print_allele = pieces[2*i + 1];
-			cout << rsid_num << "\t" << chromosome << "\t" << position << "\t" << print_allele << endl;
+			cout << rsid_num << "\t" << chromosome << "\t" << (position + 1 - is_indel_shortform(pieces[2*i + 1], alleles_in)) << "\t" << print_allele << endl;
 			++found;
 		}
 		else {
