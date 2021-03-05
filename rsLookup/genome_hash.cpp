@@ -4,6 +4,11 @@
 #include <vector>
 #include <fstream>
 #include <cmath>
+#include <filesystem>
+
+#include <boost/iostreams/filtering_streambuf.hpp>
+#include <boost/iostreams/filter/gzip.hpp>
+#include <boost/filesystem.hpp>
 
 #include "diskhash/diskhash.hpp"
 #include "CLI11.hpp"
@@ -91,12 +96,20 @@ vector<string> str_split(const std::string& str, char delim = ' ')
 int create_rsid_table(const char *source_name, const char* rsid_table_name, ostream *log_file) {
 	DiskHash<SNPData> ht(rsid_table_name, key_maxlen, dht::DHOpenRW);
 	string line;
-	ifstream file;
-	file.open(string(source_name));
-	if (!file.is_open()) {
+	ifstream filebase;
+	filebase.open(string(source_name));
+	if (!filebase.is_open()) {
 		cout << "Source file could not be opened" << endl;
-		return 1;
+		exit(1);
 	}
+	bool compressed = boost::filesystem::path(string(source_name)).extension() == ".gz";
+	boost::iostreams::filtering_streambuf<boost::iostreams::input> inbuf;
+	if (compressed) {
+		inbuf.push(boost::iostreams::gzip_decompressor());
+		inbuf.push(filebase);
+	}
+	istream compressed_stream(&inbuf);
+	istream &file = compressed ? compressed_stream : filebase;
 	int max_rsid_length = 0;
 	int max_content_length = 0;
 	while (std::getline(file, line)) {
@@ -119,7 +132,7 @@ int create_rsid_table(const char *source_name, const char* rsid_table_name, ostr
 		const char *rsid_num_part = rsid_str.substr(2, rsid_str.length()).c_str();
 		const bool inserted = ht.insert(rsid_num_part, item);
 	}
-	file.close();
+	filebase.close();
 	return 0;
 }
 
@@ -241,14 +254,22 @@ int create_cpa_table_pointer(const char *source_name, const char* rsid_table_nam
 	// The diskhash will point to locations in the .data file.
 	DiskHash<size_t> ht(rsid_table_name, key_maxlen_big, dht::DHOpenRW);
 	string line;
-	ifstream file;
-	file.open(string(source_name));
+	ifstream filebase;
+	filebase.open(string(source_name));
+	if (!filebase.is_open()) {
+		cout << "Source file could not be opened" << endl;
+		exit(1);
+	}
+	bool compressed = boost::filesystem::path(string(source_name)).extension() == ".gz";
+	boost::iostreams::filtering_streambuf<boost::iostreams::input> inbuf;
+	if (compressed) {
+		inbuf.push(boost::iostreams::gzip_decompressor());
+		inbuf.push(filebase);
+	}
+	istream compressed_stream(&inbuf);
+	istream &file = compressed ? compressed_stream : filebase;
 	ofstream s_file;
 	s_file.open(string(rsid_table_name) + ".data");
-	if (!file.is_open()) {
-		cout << "Source file could not be opened" << endl;
-		return 1;
-	}
 	int max_rsid_length = 0;
 	int max_content_length = 0;
 	size_t prev_pos = s_file.tellp();
@@ -288,7 +309,7 @@ int create_cpa_table_pointer(const char *source_name, const char* rsid_table_nam
 		}
 	}
 	s_file << line_break;
-	file.close();
+	filebase.close();
 	s_file.close();
 	return 0;
 }
