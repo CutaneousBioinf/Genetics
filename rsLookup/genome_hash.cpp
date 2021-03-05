@@ -401,20 +401,38 @@ void get_cpa_pointers_file(const string &filename, const string &source, const s
 	file.close();
 }
 
+void load_positional_arguments(const vector<string> &args, const vector<string*> &target) {
+	size_t nextpos = 0;
+	for (size_t i = 0; i < target.size(); ++i) {
+		string &deref = *(target[i]);
+		if (deref.length() == 0) {
+			if (nextpos == args.size()) break;
+			deref = args[nextpos++];
+		}
+	}
+}
+
 // Main function
 // Uses CLI11 for the command-line interface, which autogenerates a help screen
 int main(int argc, char** argv) {
 	CLI::App app{"rsLookup genomic hash table lookup program"};
 	string type = "";
+	string pos1 = "", pos2 = "", pos3 = "", pos4 = "";
+	app.add_option("pos1", pos1, "pos1")->group("");
+	app.add_option("pos2", pos2, "pos2")->group("");
+	app.add_option("pos3", pos3, "pos3")->group("");
+	app.add_option("pos4", pos4, "pos4")->group("");
 	CLI::Option *set_option = app.add_set("-k,--kind", type, {"rsid", "cpa"}, "Kind of creation or lookup (rsID or chromosome/position/allele)");
 	string table_name = "", source_name = "";
 	CLI::Option *source_option = app.add_option("-s,--source", source_name, "Path to source data file used for hash table creation")->check(CLI::ExistingFile);
 	CLI::Option *table_option = app.add_option("-t,--table", table_name, "Path to hash table to be created or examined");
+	string folder_name = "";
+	CLI::Option *folder_option = app.add_option("-d,--directory", folder_name, "Path to directory of hash table data to be created or examined, storing both types")->excludes(table_option);
 	bool create = false, retrieve = false;
-	CLI::Option *create_flag = app.add_flag("-C,--create", create, "Create hash table")->needs(set_option)->needs(source_option)->needs(table_option);
-	CLI::Option *retrieve_flag = app.add_flag("-R,--retrieve", retrieve, "Retrieves a given rsID (starting with rs) or a chromosome/position/allele triplet separated by spaces")->needs(set_option)->needs(table_option);
+	CLI::Option *create_flag = app.add_flag("-C,--create", create, "Create hash table");
+	CLI::Option *retrieve_flag = app.add_flag("-R,--retrieve", retrieve, "Retrieves a given rsID (starting with rs) or a chromosome/position/allele triplet separated by spaces");
 	string file_path = "";
-	CLI::Option *file_option = app.add_option("-f,--file", file_path, "Path to input file")->check(CLI::ExistingFile)->needs(retrieve_flag);
+	CLI::Option *file_option = app.add_option("-f,--file", file_path, "Path to input file")->check(CLI::ExistingFile);
 	string rsid = "", chromosome = "", position = "", alleles = "";
 	CLI::Option *rsid_option = app.add_option("-r,--rsid", rsid, "rsID marker (format rsNNNNNNNNN)");
 	CLI::Option *chromosome_option = app.add_option("-c,--chromosome", chromosome, "Chromosome (format chr{1,...,26,X,Y})");
@@ -434,18 +452,78 @@ int main(int argc, char** argv) {
 		log_file = &log_stream;
 	}
 	else if (!quiet) log_file = &cerr;
+	
+	
+	// Parse positional arguments
+	vector<string> allArgs = {pos1, pos2, pos3, pos4};
+	vector<string> args;
+	for (size_t i = 0; i < allArgs.size(); ++i) {
+		if (allArgs[i].length() > 0) args.push_back(allArgs[i]);
+	}
+	if (!create) retrieve = true;
+	
 	if (create) {
+		bool targetFromPos = table_name.length() == 0 && folder_name.length() == 0;
+		load_positional_arguments(args, {&source_name, &table_name});
+		if (table_name.length() > 0 && folder_name.length() > 0) {
+			cerr << "Error: Only one destination can be specified\n";
+			return 1;
+		}
+		if (targetFromPos && boost::filesystem::path(table_name).extension() == "")
+			folder_name = table_name;
+		if (type.length() == 0 && !boost::filesystem::is_directory(folder_name))
+			boost::filesystem::create_directories(folder_name);
+		
 		if (type == "rsid")
 			create_rsid_table(source_name.c_str(), table_name.c_str(), log_file);
 		else if (type == "cpa")
 			create_cpa_table_pointer(source_name.c_str(), table_name.c_str(), include_all, log_file);
+		else if (type.length() == 0 && folder_name.length() > 0) {
+			create_rsid_table(source_name.c_str(), (folder_name + "/rsid.dht").c_str(), log_file);
+			create_cpa_table_pointer(source_name.c_str(), (folder_name + "/cpa.dht").c_str(), include_all, log_file);
+		}
+		else {
+			cerr << "The request was unrecognized. No action was taken.\n";
+			return 1;
+		}
 	}
 	else if (retrieve) {
+		if (table_name.length() == 0 && folder_name.length() == 0) {
+			if (args.size() > 0) {
+				string location = args[0];
+				args.erase(args.begin());
+				if (boost::filesystem::path(location).extension() == "") folder_name = location;
+				else table_name = location;
+			}
+			else {
+				cerr << "Error: No input file specified\n";
+				return 1;
+			}
+		}
+		if (type == "") {
+			if (rsid.length() > 0) type = "rsid";
+			else if (chromosome.length() > 0) type = "cpa";
+			else {
+				if (args.size() > 0) {
+					if (args[0].substr(0, 2) == "rs") type = "rsid";
+					else type = "cpa";
+				}
+				else {
+					cerr << "Error: Lookup not specified\n";
+					return 1;
+				}
+			}
+		}
 		if (type == "rsid") {
+			load_positional_arguments(args, {&rsid});
+			if (table_name.size() == 0) table_name = folder_name + "/rsid.dht";
 			if (file_path == "") get_rsid(table_name.c_str(), rsid.c_str(), log_file);
 			else get_rsid_file(file_path, table_name, log_file);
 		}
 		else if (type == "cpa") {
+			load_positional_arguments(args, {&chromosome, &position, &alleles});
+			if (table_name.size() == 0) table_name = folder_name + "/cpa.dht";
+			if (chromosome.substr(0, 3) != "chr") chromosome = "chr" + chromosome;
 			if (file_path == "") get_cpa_pointers(source_name.c_str(), table_name.c_str(), chromosome.c_str(), position.c_str(), alleles.c_str(), log_file);
 			else get_cpa_pointers_file(file_path, source_name, table_name, log_file);
 		}
