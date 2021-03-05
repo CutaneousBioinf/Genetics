@@ -439,9 +439,10 @@ int main(int argc, char** argv) {
 	CLI::Option *allele_option = app.add_option("-a,--allele", alleles, "Allele to be looked up");
 	CLI::Option *position_option = app.add_option("-p,--position", position, "Position to be looked up, indexed from 1");
 	string log_name = "";
-	bool quiet = false;
+	bool quiet = false, verbose = false;
 	CLI::Option *log_file_option = app.add_option("-l,--log-file", log_name, "Specifies the location of a log file to contain entries of a given chromosome and position that do not match the allele input");
 	CLI::Option *quiet_option = app.add_flag("-q,--quiet", quiet, "Quiet mode");
+	CLI::Option *verbose_option = app.add_flag("-v,--verbose", verbose, "Verbose mode")->excludes(quiet_option);
 	bool include_all = false;
 	CLI::Option *all_option = app.add_flag("-A,--all", include_all, "Include all markers in reverse map, not just recognized ones");
 	CLI11_PARSE(app, argc, argv);
@@ -451,7 +452,7 @@ int main(int argc, char** argv) {
 		log_stream.open(log_name);
 		log_file = &log_stream;
 	}
-	else if (!quiet) log_file = &cerr;
+	else if ((verbose && create) || (!create && !quiet)) log_file = &cerr;
 	
 	
 	// Parse positional arguments
@@ -496,7 +497,9 @@ int main(int argc, char** argv) {
 				else table_name = location;
 			}
 			else {
-				cerr << "Error: No input file specified\n";
+				int help_argc = 2;
+		const char *help_argv[2] = {"rsLookup", "-h"};
+		CLI11_PARSE(app, help_argc, help_argv);
 				return 1;
 			}
 		}
