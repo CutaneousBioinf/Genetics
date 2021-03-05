@@ -12,7 +12,9 @@ To create the rsID -> chromosome/position/allele map:
 `rsLookup -C -k rsid -s [path_to_snp150Common.txt[.gz]] -t [rsid_table_name.dht]`
 To create the chromosome/position/allele -> rsID map:
 `rsLookup -C -k cpa -s [path_to_snp150Common.txt[.gz]] -t [cpa_table_name.dht]`
+
 Alternatively, one may create both hash tables by specifying the -d option as a directory rather than the -t option.
+
 Shortform version:
 `rsLookup -C [path_to_snp150Common.txt[.gz]] [target_directory_path]`
 
@@ -22,10 +24,15 @@ To return the rsID of a marker given the chromosome/position/allele:
 `rsLookup -R -k rsid -t [rsid_table_name.dht] -r rsNNNNNNNNN`
 To return the rsID of a marker given the chromosome/position/allele sequence:
 `rsLookup -R -k cpa -t [cpa_table_name.dht] -c chrXX -p NNNNN -a [allele_sequence]`
+
 Alternatively, one may use the -d option to specify the data directory rather than the -t option.
+
 Shortform version:
+
 `rsLookup [data_directory_path_or_appropriate_table] rsNNNNNNNNN`
+
 `rsLookup [data_directory_path_or_appropriate_table] chrXX [position] [allele_sequence]`
+
 Note: One may omit the chr at the beginning of the chromosome string and expect the same behavior.
 
 ## Other options
