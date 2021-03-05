@@ -4,10 +4,6 @@ import pandas as pd
 
 
 def fishersExactTest(binaryFile, alternative):
-    numFirstFileOnes = 0
-    numFirstFileZeros = 0
-    numBothOnes = 0
-    numBothZeros = 0
     p_values = []
     oddsratios = []
     filenames = []
@@ -18,6 +14,11 @@ def fishersExactTest(binaryFile, alternative):
             if j == 0:
                 filenames = L
             for i in range(3, len(L)):
+                numFirstFileOnes = 0
+                numFirstFileZeros = 0
+                numBothOnes = 0
+                numBothZeros = 0
+
                 if L[i] == 0 and L[2] == 0:
                     numBothZeros = numBothZeros + 1
                 elif L[i] == 1 and L[2] == 1:
@@ -30,11 +31,6 @@ def fishersExactTest(binaryFile, alternative):
 
             contingency = np.array([[numBothOnes, numFirstFileOnes], [numFirstFileZeros, numBothZeros]])
             p_value, oddsratio = stats.fisher_exact(contingency, alternative)
-
-            numFirstFileOnes = 0
-            numFirstFileZeros = 0
-            numBothOnes = 0
-            numBothZeros = 0
 
             p_values.append(p_value)
             oddsratios.append(oddsratio)
