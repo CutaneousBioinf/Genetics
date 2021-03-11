@@ -93,6 +93,7 @@ vector<string> str_split(const std::string& str, char delim = ' ')
 
 // Creates the hash table from the tab-separated file using RSID number string as key
 int create_rsid_table(const char *source_name, const char* rsid_table_name, ostream *log_file) {
+	cout << "Creating table from rsID to position...\n";
 	DiskHash<SNPData> ht(rsid_table_name, key_maxlen, dht::DHOpenRW);
 	string line;
 	ifstream filebase;
@@ -249,6 +250,7 @@ int indel_shortform_normalize(const vector<string> &marker_split) {
 
 // Creates the reverse map from chromosome/position/allele to rsID
 int create_cpa_table_pointer(const char *source_name, const char* rsid_table_name, bool include_all, ostream *log_file) {
+	cout << "Creating table from position to rsID...\n";
 	// Create diskhash file plus a text file with ".data" appended to filename
 	// The diskhash will point to locations in the .data file.
 	DiskHash<size_t> ht(rsid_table_name, key_maxlen_big, dht::DHOpenRW);
