@@ -86,7 +86,7 @@ def testcases():
     assert (len(significantLoci) == 1)
 
     # non numeric p-val
-    significantLoci = getLoci(0.5, "nonNumericP.txt.txt", 50000, 0, " ")
+    significantLoci = getLoci(0.5, "nonNumericP.txt", 50000, 0, " ")
     assert (type(significantLoci[0][1]) == int)
 
 

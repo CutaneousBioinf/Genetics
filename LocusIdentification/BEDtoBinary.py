@@ -35,9 +35,8 @@ def convert(markersFile, filenames):
                             binary.append(1)
                             found = True
                             break
-                    else:
-                        if not found:
-                            binary.append(0)
+                if not found:
+                    binary.append(0)
 
             # Add binary data from this BED file to the "master" matrix.
             binaryData.append(binary)
