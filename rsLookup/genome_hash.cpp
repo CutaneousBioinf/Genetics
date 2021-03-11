@@ -4,7 +4,6 @@
 #include <vector>
 #include <fstream>
 #include <cmath>
-#include <filesystem>
 
 #include <boost/iostreams/filtering_streambuf.hpp>
 #include <boost/iostreams/filter/gzip.hpp>

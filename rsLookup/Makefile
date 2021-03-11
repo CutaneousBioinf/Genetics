@@ -1,7 +1,7 @@
 DEFAULT_GOAL = release
 CXXFLAGS_DEBUG = -g3
 CXXFLAGS_RELEASE = -o3
-CXXFLAGS_LIBS = -lboost_iostreams -lboost_filesystem
+CXXFLAGS_LIBS = -lboost_system -lboost_iostreams -lboost_filesystem
 
 # Compile the main executable
 release: genome_hash.cpp
