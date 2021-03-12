@@ -533,6 +533,12 @@ int main(int argc, char** argv) {
 			load_positional_arguments(args, {&chromosome, &position, &alleles});
 			if (table_name.size() == 0) table_name = folder_name + "/cpa.dht";
 			if (chromosome.substr(0, 3) != "chr") chromosome = "chr" + chromosome;
+			vector<string> chr_position = str_split(chromosome, ':');
+			if (chr_position.size() > 1) {
+				chromosome = chr_position[0];
+				if (position.length() > 0 && alleles.length() == 0) alleles = position;
+				position = chr_position[1];
+			}
 			if (file_path == "") get_cpa_pointers(source_name.c_str(), table_name.c_str(), chromosome.c_str(), position.c_str(), alleles.c_str(), log_file);
 			else get_cpa_pointers_file(file_path, source_name, table_name, log_file);
 		}
