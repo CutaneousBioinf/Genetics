@@ -328,7 +328,12 @@ int get_rsid(const char *rsid_table_name, const char* rsid_param, ostream *log_f
 	SNPData *member;
 	if (ht.is_member(rsid_num_part)) {
 		member = ht.lookup(rsid_num_part);
-		cout << rsid << "\t" << member->data << endl;
+		string result = member->data;
+		vector<string> pieces = str_split(result, '\t');
+		string chromosome = pieces[0];
+		string startpos = to_string(atoi(pieces[1].c_str()) + 1);
+		string alleles = pieces[2];
+		cout << rsid << "\t" << chromosome << "\t" << startpos << "\t" << alleles << endl;
 	}
 	else {
 		if (log_file)
