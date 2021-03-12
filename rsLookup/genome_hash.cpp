@@ -435,8 +435,8 @@ int main(int argc, char** argv) {
 	string folder_name = "";
 	CLI::Option *folder_option = app.add_option("-d,--directory", folder_name, "Path to directory of hash table data to be created or examined, storing both types")->excludes(table_option);
 	bool create = false, retrieve = false;
-	CLI::Option *create_flag = app.add_flag("-C,--create", create, "Create hash table");
-	CLI::Option *retrieve_flag = app.add_flag("-R,--retrieve", retrieve, "Retrieves a given rsID (starting with rs) or a chromosome/position/allele triplet separated by spaces");
+	CLI::Option *create_flag = app.add_flag("-C,--create", create, "Create hash table\nNOTE: In addition to command-line options, positional arguments can also be used for the lookups as follows:\nrsLookup -C [path_to_snp150Common.txt[.gz]] [target_directory_path]");
+	CLI::Option *retrieve_flag = app.add_flag("-R,--retrieve", retrieve, "Retrieves a given rsID (starting with rs) or a chromosome/position/allele triplet separated by spaces\nNOTE: In addition to command-line options, positional arguments can also be used for the lookups as follows:\nrsLookup [data_directory_path_or_appropriate_table] rsNNNNNNNNN\nrsLookup [data_directory_path_or_appropriate_table] chrXX [position] [allele_sequence]\nrsLookup [data_directory_path_or_appropriate_table] [chr]:[pos] [a1/a2]");
 	string file_path = "";
 	CLI::Option *file_option = app.add_option("-f,--file", file_path, "Path to input file")->check(CLI::ExistingFile);
 	string rsid = "", chromosome = "", position = "", alleles = "";

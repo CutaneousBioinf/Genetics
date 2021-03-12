@@ -4,7 +4,7 @@ The rsLookup library allows for the searching of the snp150Common dataset for mo
 
 ## Installation
 
-Simply clone the repository and run the make command, which will generate a self-contained rsLookup binary. The diskhash library is included and will be statically linked with the rsLookup binary. rsLookup depends on the boost-iostreams and boost-filesystem libraries.
+Simply clone the repository and run the make command, which will generate a self-contained rsLookup binary. The diskhash library is included and will be statically linked with the rsLookup binary. rsLookup depends on the boost_system, boost_iostreams, and boost_filesystem libraries.
 
 ## Creating hash tables
 
@@ -32,6 +32,8 @@ Shortform version:
 `rsLookup [data_directory_path_or_appropriate_table] rsNNNNNNNNN`
 
 `rsLookup [data_directory_path_or_appropriate_table] chrXX [position] [allele_sequence]`
+
+`rsLookup [data_directory_path_or_appropriate_table] [chr]:[pos] [a1/a2]`
 
 Note: One may omit the chr at the beginning of the chromosome string and expect the same behavior.
 
