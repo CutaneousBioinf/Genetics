@@ -1,44 +1,44 @@
 import numpy as np
 
 
-# Things to ask:
-# Is the data going in as files or as lists/dataframes?
-# How do you know a marker is in a locus? Is it based on position or chr?
-# Should the significant markers be saved in getLoci.py?
-def convert(markersFile, lociList):
+# filenames is a list of the BED documents to compare
+# lociFile is the list of loci
+def convert(lociFile, filenames):
+    # initial variables
     chromosomes = []
     positions = []
     binaryData = []
-    headers = ["chr", "position"]
+    headers = ["chr", "pos"]
 
-    # Go through each loci, logging the chromosomes and the position
-    with open(lociList) as f:
+    # Read through locus file, logging the chromosomes and the position
+    with open(lociFile) as f:
         for line in f:
             L = line.strip().split()
             chromosomes.append(L[0])
             positions.append(L[1])
 
     # Read through each remaining BED file
-    with open(markersFile) as f:
-        for i in range(0, len(positions)):
-            # From here, mostly the same as BED to binary
-            found = False
-            for line in f:
-                L = line.strip().split()
-                binary = []
-                # add the position of the marker to the headers
-                headers.append(L[1])
-                # If the chromosomes being currently compared are the same, continue
-                if int(L[0]) == chromosomes[i]:
-                    # If the positions of the markers and the loci are overlapping, then append "1".
-                    if isOverlapping(positions[i], L[1]):
-                        binary.append(1)
-                        found = True
-                        break
-            if not found:
-                binary.append(0)
+    for file in filenames:
+        with open(file) as f:
 
-            # Add binary data from this marker to the "master" matrix.
+            # Add filename to header.
+            headers.append(file)
+            for i in range(0, len(chromosomes)):
+                found = False
+                for line in f:
+                    L = line.strip().split()
+                    binary = []
+                    # If the chromosomes being currently compared are the same, continue
+                    if int(L[0]) == chromosomes[i]:
+                        # If the positions of the chromosomes are overlapping, then append "1".
+                        if isOverlapping(positions[i], [L[1], L[2]]):
+                            binary.append(1)
+                            found = True
+                            break
+                if not found:
+                    binary.append(0)
+
+            # Add binary data from this BED file to the "master" matrix.
             binaryData.append(binary)
 
     finalMatrix = np.vstack((chromosomes, positions, binaryData))
@@ -47,6 +47,5 @@ def convert(markersFile, lociList):
     return finalMatrix
 
 
-# not sure about this
-def isOverlapping(position, markerPosition):
-    return position is markerPosition
+def isOverlapping(position, positionIntervalArray):
+    return (position > positionIntervalArray[0]) and (positionIntervalArray[1] > position)
