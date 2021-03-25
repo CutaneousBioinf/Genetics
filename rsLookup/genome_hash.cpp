@@ -239,11 +239,37 @@ int is_indel_shortform_loop(const string &user_input, const vector<string> &mark
 	return 0;
 }
 
+int is_indel_shortform_loop_backward(const string &user_input, vector<string> marker_split) {
+	string back = marker_split[marker_split.size() - 1];
+	marker_split.pop_back();
+	marker_split.insert(marker_split.begin(), back);
+	vector<string> allele_split = str_split(user_input, '/');
+	if (marker_split.size() < 2 || allele_split.size() < 2 || allele_split[0] != "-") return false;
+	for (size_t i = 1; i < allele_split.size(); ++i) {
+		int result = is_indel_shortform(allele_split[0] + "/" + allele_split[i], marker_split);
+		if (result) return result;
+	}
+	return 0;
+}
+
+int check_indel_shortform(const string &user_input, const vector<string> &marker_split) {
+	return max(is_indel_shortform_loop(user_input, marker_split), is_indel_shortform_loop_backward(user_input, marker_split));
+}
+
 int indel_shortform_normalize(const vector<string> &marker_split) {
 	if (marker_split.size() != 2) return 0;
 	if (marker_split[0].length() >= marker_split[1].length()) return 0;
 	if (marker_split[0] == marker_split[1].substr(0, marker_split[0].length())) {
 		return marker_split[0].length();
+	}
+	return 0;
+}
+
+int indel_shortform_normalize_backward(const vector<string> &marker_split) {
+	if (marker_split.size() != 2) return 0;
+	if (marker_split[1].length() >= marker_split[0].length()) return 0;
+	if (marker_split[1] == marker_split[0].substr(0, marker_split[1].length())) {
+		return marker_split[1].length();
 	}
 	return 0;
 }
@@ -352,7 +378,7 @@ int get_cpa_pointers(const char *data_file_name, const char *rsid_table_name, co
 	string chromosome(chromosome_c);
 	string allele(allele_c);
 	vector<string> alleles_in = str_split(allele, '/');
-	int position = atoi(position_c) - 1 + indel_shortform_normalize(alleles_in);
+	int position = atoi(position_c) - 1 + max(indel_shortform_normalize(alleles_in), indel_shortform_normalize_backward(alleles_in));
 	string snp_b_key = "sc" + chromosome_to_key(chromosome) + "_" + to_string(position);
 	int found = 0;
 	if (!ht.is_member(snp_b_key.c_str())) {
@@ -370,10 +396,15 @@ int get_cpa_pointers(const char *data_file_name, const char *rsid_table_name, co
 		vector<string> alleles = str_split(pieces[2*i + 1], '/');
 		vector<string> complement = get_complement(alleles);
 		string rsid_num = pieces[2*i];
-		if (allele == "" || pieces[2*i + 1] == allele || is_subset(alleles_in, alleles) || (alleles[0] == "-" && is_subset(alleles_in, vector<string>(alleles.begin() + 1, alleles.end()))) || is_subset(alleles_in, complement) || is_indel_shortform_loop(pieces[2*i + 1], alleles_in)) {
+		if (allele == "" || 
+		pieces[2*i + 1] == allele || 
+		(!is_subset({"-"}, alleles) && (is_subset(alleles_in, alleles) || is_subset(alleles_in, complement))) ||
+		(alleles[0] == "-" && alleles_in[0] == "-" && is_subset(vector<string>(alleles_in.begin() + 1, alleles_in.end()), vector<string>(alleles.begin() + 1, alleles.end()))) ||
+		(alleles[0] == "-" && alleles_in[alleles_in.size() - 1] == "-" && is_subset(vector<string>(alleles_in.begin(), alleles_in.end() - 1), vector<string>(alleles.begin() + 1, alleles.end()))) || 
+		check_indel_shortform(pieces[2*i + 1], alleles_in)) {
 			string print_allele = allele;
 			if (allele == "") print_allele = pieces[2*i + 1];
-			cout << rsid_num << "\t" << chromosome << "\t" << (position + 1 - is_indel_shortform_loop(pieces[2*i + 1], alleles_in)) << "\t" << print_allele << endl;
+			cout << rsid_num << "\t" << chromosome << "\t" << (position + 1 - check_indel_shortform(pieces[2*i + 1], alleles_in)) << "\t" << print_allele << endl;
 			++found;
 		}
 		else {
