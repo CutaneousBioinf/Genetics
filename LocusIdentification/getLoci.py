@@ -14,7 +14,10 @@ import sys
 @click.option('--threshold', default=0.5, help='p_value threshold')
 @click.option('--gap', default=50000)
 @click.option('--outputfile', default="loci.csv")
-def getLoci(threshold, path, gap, chromosome, outputfile):
+@click.option('--outputmarkers', default=1, help='1 to create a file of markers, and 0 to only create a '
+                                                 'file for loci')
+@click.option('--outputmarkersfile', default="markers.csv")
+def getLoci(threshold, path, gap, chromosome, outputfile, outputmarkers, outputmarkersfile):
     # process file into csv dataframe
     df = pd.read_csv(path, delimiter='	')
     df = df[pd.to_numeric(df['p_value'], errors='coerce').notnull()]
@@ -70,9 +73,14 @@ def getLoci(threshold, path, gap, chromosome, outputfile):
 
     sys.stderr.write("Loci identified.\n")
 
+    if(outputmarkers):
+        markers_df = pd.DataFrame(data=significantMarkers, columns=["pos", "chr", "p_value"])
+        markers_df.to_csv(outputmarkersfile) if outputmarkersfile != " " else print(markers_df)
+        sys.stderr.write("Markers file created.\n")
+
     final_df = pd.DataFrame(data=significantLoci, columns=["pos", "chr", "p_value"])
     final_df.to_csv(outputfile) if outputfile != " " else print(final_df)
-    sys.stderr.write("Output file created.\n")
+    sys.stderr.write("Loci file created.\n")
     return significantLoci
 
 
