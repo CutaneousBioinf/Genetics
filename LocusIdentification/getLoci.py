@@ -51,6 +51,7 @@ def getLoci(threshold, path, gap, chromosome, outputfile, outputmarkers, outputm
     sys.stderr.write("Data sorted and filtered.\n")
 
     significantLoci = []
+    correspondingLociPos = []
     rows = np.shape(significantMarkers)[0]
 
     # gets loci from each chromosome, and puts them in array
@@ -71,10 +72,14 @@ def getLoci(threshold, path, gap, chromosome, outputfile, outputmarkers, outputm
             significantLocus = significantMarkers[i, :]
             p_val = significantMarkers[i][2]
 
+        correspondingLociPos.append(significantLocus[0])
+
     sys.stderr.write("Loci identified.\n")
 
     if(outputmarkers):
-        markers_df = pd.DataFrame(data=significantMarkers, columns=["pos", "chr", "p_value"])
+        correspondingLociPos = np.transpose(correspondingLociPos)
+        significantMarkers = np.hstack((significantMarkers, correspondingLociPos))
+        markers_df = pd.DataFrame(data=significantMarkers, columns=["pos", "chr", "p_value", "correspondingLociPos"])
         markers_df.to_csv(outputmarkersfile) if outputmarkersfile != " " else print(markers_df)
         sys.stderr.write("Markers file created.\n")
 
