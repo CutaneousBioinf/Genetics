@@ -206,7 +206,7 @@ bool all_alleles(const vector<string> &alleles) {
 
 // Check if allele string is SNP on the condition that all slash-separated values are either A, C, G, or T
 bool is_snp(const string &alleles_str) {
-	if (alleles_str == "" || alleles_str.find("/") == string::npos) return false;
+	if (alleles_str == "") return false;
 	vector<string> alleles = str_split(alleles_str, '/');
 	return all_alleles(alleles);
 }
