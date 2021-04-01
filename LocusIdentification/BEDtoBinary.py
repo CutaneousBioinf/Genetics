@@ -7,6 +7,7 @@ def convert(markersFile, filenames):
     # initial variables
     chromosomes = []
     positions = []
+    lociPositions = []
     binaryData = []
     headers = ["chr", "position"]
 
@@ -16,6 +17,7 @@ def convert(markersFile, filenames):
             L = line.strip().split()
             chromosomes.append(L[0])
             positions.append(L[1])
+            lociPositions.append(L[3])
 
     # Read through each remaining BED file
     for file in filenames:

@@ -17,7 +17,7 @@ import sys
 @click.option('--outputmarkers', default=1, help='1 to create a file of markers, and 0 to only create a '
                                                  'file for loci')
 @click.option('--outputmarkersfile', default="markers.csv")
-def getLoci(threshold, path, gap, chromosome, outputfile, outputmarkers, outputmarkersfile):
+def getLoci(threshold, path, gap, chromosome, outputfile, outputmarkers):
     # process file into csv dataframe
     df = pd.read_csv(path, delimiter='	')
     df = df[pd.to_numeric(df['p_value'], errors='coerce').notnull()]
@@ -76,16 +76,17 @@ def getLoci(threshold, path, gap, chromosome, outputfile, outputmarkers, outputm
 
     sys.stderr.write("Loci identified.\n")
 
-    if(outputmarkers):
+    #If outputMarkers, then combine the loci and the markers into one file. Otherwise, just print out the loci.
+    if outputmarkers:
         correspondingLociPos = np.transpose(correspondingLociPos)
         significantMarkers = np.hstack((significantMarkers, correspondingLociPos))
         markers_df = pd.DataFrame(data=significantMarkers, columns=["pos", "chr", "p_value", "correspondingLociPos"])
-        markers_df.to_csv(outputmarkersfile) if outputmarkersfile != " " else print(markers_df)
+        markers_df.to_csv(outputfile) if outputfile != " " else print(markers_df)
         sys.stderr.write("Markers file created.\n")
-
-    final_df = pd.DataFrame(data=significantLoci, columns=["pos", "chr", "p_value"])
-    final_df.to_csv(outputfile) if outputfile != " " else print(final_df)
-    sys.stderr.write("Loci file created.\n")
+    else:
+        final_df = pd.DataFrame(data=significantLoci, columns=["pos", "chr", "p_value"])
+        final_df.to_csv(outputfile) if outputfile != " " else print(final_df)
+        sys.stderr.write("Loci file created.\n")
     return significantLoci
 
 
