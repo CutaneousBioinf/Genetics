@@ -569,6 +569,11 @@ int main(int argc, char** argv) {
 				chromosome = chr_position[0];
 				if (position.length() > 0 && alleles.length() == 0) alleles = position;
 				position = chr_position[1];
+				vector<string> position_alleles = str_split(position, '_');
+				if (position_alleles.size() > 1) {
+					position = position_alleles[0];
+					alleles = position_alleles[1];
+				}
 			}
 			if (file_path == "") get_cpa_pointers(source_name.c_str(), table_name.c_str(), chromosome.c_str(), position.c_str(), alleles.c_str(), log_file);
 			else get_cpa_pointers_file(file_path, source_name, table_name, log_file);
