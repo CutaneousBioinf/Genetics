@@ -18,9 +18,9 @@ def linkageDisequilibrium(lociPath, LDPath, LDthreshold, outputfile):
         if (LD[i][2]) >= LDthreshold:
             for j in range(0, len(markerPositions)):
                 if LD[i][0] == j or LD[i][1] == j:
-                    markers.append([markerPositions[j], markerChr[j], markerPVal[j], lociPos[j], LD[i][0], LD[i][2]])
+                    markers.append([markerPositions[j], markerChr[j], markerPVal[j], lociPos[j], LD[i][2]])
 
-    markers_df = pd.DataFrame(data=markers, columns=["pos", "chr", "p_value", "correspondingLociPos", "surrogateMarker", "LDval"])
+    markers_df = pd.DataFrame(data=markers, columns=["pos", "chr", "p_value", "correspondingLociPos", "LDval"])
     markers_df.to_csv(outputfile) if outputfile != " " else print(markers_df)
     sys.stderr.write("Markers file created.\n")
     return markers
