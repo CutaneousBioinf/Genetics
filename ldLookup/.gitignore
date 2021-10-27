@@ -1,5 +1,6 @@
 # Special ignores
-ldlookupx
+ldLookupx
+testsx
 *.dht
 *.dat
 data/*
