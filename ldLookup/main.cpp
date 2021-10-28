@@ -36,7 +36,7 @@ int main (int argc, char** argv) {
     create->add_option("source_path", source_path, description)->required();
 
     float min_r2{ 0 };
-    description = "Minimum r-squared value for a key-value pair to be included in the table";
+    description = "Minimum r-squared value to include a key-value pair in the table";
     create->add_option("-r,--r2-threshold", min_r2, description);
 
     size_t key_index{ 2 };

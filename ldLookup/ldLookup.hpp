@@ -23,11 +23,11 @@ class RecordParser {
 
         /** Constructs a RecordParser.
          * 
-         * key_index
-         * value_index
-         * r2_index
-         * delimiter
-         * min_r2
+         * key_index - Index to column of data containing lookup table keys
+         * value_index - Index to column of data containing lookup table values
+         * r2_index - Index to column of data containing r-squared values
+         * delimiter - Character used to separate columns of data
+         * min_r2 - Minimum r-squared value to include a key-value pair in the table
          */
         RecordParser(size_t key_index=2, size_t value_index=6, 
                      size_t r2_index=8, char delimiter=' ',
