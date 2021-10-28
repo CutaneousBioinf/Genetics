@@ -1,6 +1,21 @@
 #include "CLI11.hpp"
 #include "ldLookup.hpp"
 
+void pretty_print_table_entry(const std::string& key,
+                              const std::vector<std::string>& values) {
+    std::cout << "Key: " << key << "\n" << "Values: ";
+    int i = 0;
+    for (auto v : values) {
+        if (++i%5 == 0) {
+            std::cout << "\n";
+        }
+
+        std::cout << v << " ";
+    }
+
+    std::cout << "\n";
+}
+
 int main (int argc, char** argv) {
     std::string description;
 
@@ -45,9 +60,13 @@ int main (int argc, char** argv) {
     description = "Retrieve values existing from lookup table";
     auto retrieve = app.add_subcommand("retrieve", description);
 
-    std::string key;
-    description = "Allele to look up";
-    retrieve->add_option("key,-k,--key", key, description)->required();
+    std::string file;
+    description = "File containing alleles to look up (one per line)";
+    retrieve->add_option("file,-f,--file", file, description);
+
+    std::vector<std::string> keys;
+    description = "Alleles to look up";
+    retrieve->add_option("keys,-k,--keys", keys, description);
 
     CLI11_PARSE(app, argc, argv);
 
@@ -59,8 +78,24 @@ int main (int argc, char** argv) {
             LDTable::create_table(table, source_path, rp);
         } else if (*retrieve) {
             auto opened_table = LDTable(table);
-            for (auto v : opened_table.get(key)) {
-                std::cout << "Value: " << v << "\n";
+
+            if (file.size()) {
+                std::fstream f(file, std::ios_base::in);
+                CHECK_FAIL(f, "Failed to open file " + file);
+                
+                std::string line;
+                std::vector<std::string> values;
+                while (f) {
+                    getline(f, line);
+                    values = opened_table.get(line);
+                    pretty_print_table_entry(line, values);
+                }
+            }
+
+            std::vector<std::string> values;
+            for (auto key : keys) {
+                values = opened_table.get(key);
+                pretty_print_table_entry(key, values);
             }
         } else {
             throw std::runtime_error("Unknown subcommand passed to the CLI");
