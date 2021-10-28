@@ -1,6 +1,7 @@
 #ifndef __ldLookup_hpp__
 #define __ldLookup_hpp__
 
+#include <algorithm>
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -14,13 +15,25 @@
 std::vector<std::string> split_str(const std::string& s, char delimiter);
 
 /** Provides fast line-oriented parsing of genetic records.*/
-class SNPRecord {
+class RecordParser {
     public:
         std::string snp_a;
         std::string snp_b;
         float r2;
 
-        /** Parses one genetic record, updating an SNPRecord.
+        /** Constructs a RecordParser.
+         * 
+         * key_index
+         * value_index
+         * r2_index
+         * delimiter
+         * min_r2
+         */
+        RecordParser(size_t key_index=2, size_t value_index=6, 
+                     size_t r2_index=8, char delimiter=' ',
+                     float min_r2=0);
+
+        /** Parses one genetic record.
          * 
          * line - One genetic record in space-delimited format.
          * 
@@ -32,16 +45,18 @@ class SNPRecord {
         bool parse_line(const std::string& line);
 
     private:
-        static const int SNP_A_INDEX = 2;
-        static const int SNP_B_INDEX = 6;
-        static const int R2_INDEX = 8;
-        static const char DELIMITER = ' ';
+        int key_index;
+        int value_index;
+        int r2_index;
+        char delimiter;
+        float min_r2;
+        int last_col_index;
 };
 
 /** Persistently maps genetic markers in linkage disequilibrium. */
 class LDTable {
     public:
-        /** Opens an existing LDTable by its name */
+        /** Opens an existing LDTable by name. */
         LDTable(const std::string& name);
 
         /** Fetches values associated with a key */
@@ -51,11 +66,11 @@ class LDTable {
          * 
          * name - The name of the new LDTable.
          * source_path - Path to data used to populate the table.
-         * min_r2 - Lowest R-squared value to include in the table.
+         * parser - RecordParser to transform text data into C++ types.
          */
         static void create_table(const std::string& name,
                                  const std::string& source_path,
-                                 const float min_r2);
+                                 RecordParser parser);
 
     private:
         static const char KEY_DELIMITER = '\n';

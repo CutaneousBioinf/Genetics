@@ -12,7 +12,8 @@ int main (int argc, char** argv) {
         const std::string table = std::string(argv[2]);
         const std::string arg = std::string(argv[3]);
         if (!command.compare("create")) {
-            LDTable::create_table(table, arg, 0.8);
+            RecordParser p;
+            LDTable::create_table(table, arg, p);
         } else if (!command.compare("get")) {
             LDTable ldt(table);
             for (std::string s : ldt.get(arg)) {

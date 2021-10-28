@@ -13,31 +13,44 @@ std::vector<std::string> split_str(const std::string& s, char delimiter) {
     return ret;
 }
 
-bool SNPRecord::parse_line(const std::string& line) {
-    size_t end = 0;
-    size_t start = line.find_first_not_of(DELIMITER, end);
-    int col = 0;
-    while (start != std::string::npos) {
-        end = line.find(DELIMITER, start);
+RecordParser::RecordParser(size_t key_index, size_t value_index,
+                           size_t r2_index, char delimiter,
+                           float min_r2) {
+    this->key_index = key_index;
+    this->value_index = value_index;
+    this->r2_index = r2_index;
+    this->delimiter = delimiter;
+    this->min_r2 = min_r2;
+    this->last_col_index = std::max({ key_index, value_index, r2_index });
+}
 
-        if (col == SNP_A_INDEX) {
+bool RecordParser::parse_line(const std::string& line) {
+    size_t end = 0;
+    size_t start = line.find_first_not_of(delimiter, end);
+    int col = 0;
+    while (start != std::string::npos && col <= last_col_index) {
+        end = line.find(delimiter, start);
+
+        if (col == key_index) {
             snp_a = line.substr(start, end - start);
-        } else if (col == SNP_B_INDEX) {
+        } else if (col == value_index) {
             snp_b = line.substr(start, end - start);
-        } else if (col == R2_INDEX) {
+        } else if (col == r2_index) {
             try {
                 r2 = std::stof(line.substr(start, end - start));
+                if (r2 < min_r2) {
+                    return false;
+                }
             } catch (std::invalid_argument& e) {
                 return false;
             }
         }
 
-        start = line.find_first_not_of(DELIMITER, end);
+        start = line.find_first_not_of(delimiter, end);
         col++;
     }
-    // If there weren't values for all of snp_a, snp_b, and r2,
-    // return false.
-    return col > R2_INDEX;
+    
+    return col > last_col_index;
 }
 
 LDTable::LDTable(const std::string& name)
@@ -64,7 +77,7 @@ std::vector<std::string> LDTable::get(const std::string& key) {
 
 void LDTable::create_table(const std::string& name,
                            const std::string& source_path,
-                           const float min_r2) {
+                           RecordParser parser) {
     std::fstream data(source_path, std::ios_base::in);
     CHECK_FAIL(data, "Error opening file '" + source_path + "'");
 
@@ -80,10 +93,9 @@ void LDTable::create_table(const std::string& name,
                                                  dht::DHOpenRW));
     // Populate the LDTable.
     std::string line, last_snp_a;
-    SNPRecord parser;
     while (data) {
         getline(data, line);
-        if (!parser.parse_line(line) || parser.r2 < min_r2) {
+        if (!parser.parse_line(line)) {
             continue;
         } else if (parser.snp_a.size() > MAX_KEY_LENGTH) {
             std::string msg = "Key '" + parser.snp_a + "' too long";
