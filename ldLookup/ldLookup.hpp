@@ -68,6 +68,7 @@ class LDTable {
          * name - The name of the new LDTable.
          * source_path - Path to data used to populate the table.
          * parser - RecordParser to transform text data into C++ types.
+         * max_key_length - Maximum table key length in bytes.
          */
         static void create_table(const std::string& name,
                                  const std::string& source_path,

@@ -45,6 +45,7 @@ Options:
   -V,--value-index UINT       Zero-based index to column of data containing lookup table values
   -R,--r2-index UINT          Zero-based index to column of data containing r-squared values
   -d,--delimiter CHAR         Character used to separate columns of data
+  -k,--keys UINT              Maximum key length in bytes
 
 >>> ./ldLookupx table retrieve --help
 Retrieve values existing from lookup table
@@ -70,7 +71,7 @@ CHR_A BP_A SNP_A MAF_A CHR_B BP_B SNP_B MAF_B R2
 1 46285 1:46285:ATAT:A 0.000994036 1 66461 1:66461:T:A 0.000994036 1
 1 46285 1:46285:ATAT:A 0.000994036 1 81590 rs202072409:81590:AC:A 0.000994036 1
 1 49554 1:49554:A:G 0.0636183 1 76838 1:76838:T:G 0.0616302 0.889466
->>> ./ldLookupx myTable create -r 1 -K 2 -V 6 -R 8 -d " " data.ld 
+>>> ./ldLookupx myTable create -r 1 -K 2 -V 6 -R 8 -d " " -k 200 data.ld 
 >>> ./ldLookupx myTable retrieve -k 1:11008:C:G
 Key: 1:11008:C:G
 Values: 1:11012:C:G 
