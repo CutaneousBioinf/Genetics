@@ -55,6 +55,9 @@ int main (int argc, char** argv) {
     description = "Character used to separate columns of data";
     create->add_option("-d,--delimiter", delimiter, description);
 
+    size_t max_key_length{ 200 };
+    description = "Maximum key length in bytes";
+    create->add_option("-k,--keys", max_key_length, description);
 
     // 'Retrieve' Subcommand
     description = "Retrieve values existing from lookup table";
@@ -75,7 +78,7 @@ int main (int argc, char** argv) {
     try {
         if (*create) {
             RecordParser rp{key_index, value_index, r2_index, delimiter, min_r2};
-            LDTable::create_table(table, source_path, rp, 200);
+            LDTable::create_table(table, source_path, rp, max_key_length);
         } else if (*retrieve) {
             auto opened_table = LDTable(table);
 
