@@ -75,7 +75,7 @@ int main (int argc, char** argv) {
     try {
         if (*create) {
             RecordParser rp{key_index, value_index, r2_index, delimiter, min_r2};
-            LDTable::create_table(table, source_path, rp);
+            LDTable::create_table(table, source_path, rp, 200);
         } else if (*retrieve) {
             auto opened_table = LDTable(table);
 

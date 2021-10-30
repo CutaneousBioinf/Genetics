@@ -53,31 +53,39 @@ bool RecordParser::parse_line(const std::string& line) {
     return col > last_col_index;
 }
 
-LDTable::LDTable(const std::string& name)
-: hashtable(dht::DiskHash<std::streampos>((name + ".dht").c_str(),
-                                          MAX_KEY_LENGTH,
-                                          dht::DHOpenRO)) {
+LDTable::LDTable(const std::string& name) {
     auto path = name + ".dat";
     file.open(path, std::ios_base::in);
     CHECK_FAIL(file, "Error opening file '" + path + "'");
+
+    // Max key length is the first line of the data file.
+    std::string line;
+    getline(file, line, KEY_DELIMITER);
+    size_t max_key_length = std::stoi(line);
+
+    path = name + ".dht";
+    hashtable.reset(new dht::DiskHash<std::streampos>(path.c_str(),
+                                                      max_key_length,
+                                                      dht::DHOpenRO));
 }
 
 std::vector<std::string> LDTable::get(const std::string& key) {
-    std::streampos* loc = hashtable.lookup(key.c_str());
+    std::streampos* loc = hashtable->lookup(key.c_str());
     if (loc == NULL) {
         throw std::runtime_error("Nonexistent key '"+ key + "'");
     }
 
     file.seekg(*loc);
     std::string line;
-    getline(file, line);
+    getline(file, line, KEY_DELIMITER);
     CHECK_FAIL(file, "Failed to get key '"+ key + "'");
     return split_str(line, VALUE_DELIMITER);
 }
 
 void LDTable::create_table(const std::string& name,
                            const std::string& source_path,
-                           RecordParser parser) {
+                           RecordParser parser,
+                           const size_t max_key_length) {
     std::fstream data(source_path, std::ios_base::in);
     CHECK_FAIL(data, "Error opening file '" + source_path + "'");
 
@@ -89,15 +97,21 @@ void LDTable::create_table(const std::string& name,
 
     auto dht_path = (name + ".dht").c_str();
     auto hashtable(dht::DiskHash<std::streampos>(dht_path,
-                                                 MAX_KEY_LENGTH,
+                                                 max_key_length,
                                                  dht::DHOpenRW));
+    
+    // Max key length must be persisted so the hashtable can be reopened.
+    auto s = std::to_string(max_key_length);
+    table.write(s.c_str(), s.size());
+    table.put(KEY_DELIMITER);
+
     // Populate the LDTable.
     std::string line, last_snp_a;
     while (data) {
         getline(data, line);
         if (!parser.parse_line(line)) {
             continue;
-        } else if (parser.snp_a.size() > MAX_KEY_LENGTH) {
+        } else if (parser.snp_a.size() > max_key_length) {
             std::string msg = "Key '" + parser.snp_a + "' too long";
             throw std::runtime_error(msg);
         }

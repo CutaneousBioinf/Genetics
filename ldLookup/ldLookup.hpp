@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <memory>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -70,14 +71,14 @@ class LDTable {
          */
         static void create_table(const std::string& name,
                                  const std::string& source_path,
-                                 RecordParser parser);
+                                 RecordParser parser,
+                                 const size_t max_key_length);
 
     private:
         static const char KEY_DELIMITER = '\n';
         static const char VALUE_DELIMITER = '\t';
-        static const size_t MAX_KEY_LENGTH = 200;
 
-        dht::DiskHash<std::streampos> hashtable;
+        std::shared_ptr<dht::DiskHash<std::streampos>> hashtable;
         std::fstream file;
 };
 
