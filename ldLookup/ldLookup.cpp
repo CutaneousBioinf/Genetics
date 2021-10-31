@@ -2,13 +2,13 @@
 
 std::vector<std::string> split_str(const std::string& s, char delimiter) {
     std::vector<std::string> ret;
-	size_t end = 0;
+    size_t end = 0;
     size_t start = s.find_first_not_of(delimiter, end);
-	while (start != std::string::npos) {
-		end = s.find(delimiter, start);
-		ret.push_back(s.substr(start, end - start));
+    while (start != std::string::npos) {
+	    end = s.find(delimiter, start);
+	    ret.push_back(s.substr(start, end - start));
         start = s.find_first_not_of(delimiter, end);
-	}
+    }
 
     return ret;
 }
@@ -49,7 +49,7 @@ bool RecordParser::parse_line(const std::string& line) {
         start = line.find_first_not_of(delimiter, end);
         col++;
     }
-    
+
     return col > last_col_index;
 }
 
@@ -99,7 +99,7 @@ void LDTable::create_table(const std::string& name,
     auto hashtable(dht::DiskHash<std::streampos>(dht_path,
                                                  max_key_length,
                                                  dht::DHOpenRW));
-    
+
     // Max key length must be persisted so the hashtable can be reopened.
     auto s = std::to_string(max_key_length);
     table.write(s.c_str(), s.size());
@@ -115,7 +115,7 @@ void LDTable::create_table(const std::string& name,
             std::string msg = "Key '" + parser.snp_a + "' too long";
             throw std::runtime_error(msg);
         }
-        
+
         // Consider adding error-checking for cases where key contains
         // whitespace (\n, \t, \r\n, etc).
 

@@ -1,5 +1,5 @@
-#ifndef __ldLookup_hpp__
-#define __ldLookup_hpp__
+#ifndef LDLOOKUP_LDLOOKUP_HPP
+#define LDLOOKUP_LDLOOKUP_HPP
 
 #include <algorithm>
 #include <iostream>
@@ -30,9 +30,9 @@ class RecordParser {
          * delimiter - Character used to separate columns of data
          * min_r2 - Minimum r-squared value to include a key-value pair in the table
          */
-        RecordParser(size_t key_index=2, size_t value_index=6, 
-                     size_t r2_index=8, char delimiter=' ',
-                     float min_r2=0);
+        RecordParser(size_t key_index = 2, size_t value_index = 6,
+                     size_t r2_index = 8, char delimiter = ' ',
+                     float min_r2 = 0);
 
         /** Parses one genetic record.
          * 

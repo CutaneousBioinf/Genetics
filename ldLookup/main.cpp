@@ -16,7 +16,7 @@ void pretty_print_table_entry(const std::string& key,
     std::cout << "\n";
 }
 
-int main (int argc, char** argv) {
+int main(int argc, char** argv) {
     std::string description;
 
     description = "ldLookup - lookup and analysis of linkage disequilibrium (LD) between genetic variants";
@@ -85,7 +85,7 @@ int main (int argc, char** argv) {
             if (file.size()) {
                 std::fstream f(file, std::ios_base::in);
                 CHECK_FAIL(f, "Failed to open file " + file);
-                
+
                 std::string line;
                 std::vector<std::string> values;
                 while (f) {
