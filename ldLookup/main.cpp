@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
             RecordParser rp{key_index, value_index, r2_index, delimiter, min_r2};
             LDTable(table, source_path, rp, max_key_length);
         } else if (*retrieve) {
-            auto opened_table = LDTable(table);
+            LDTable opened_table(table);
 
             if (file.size()) {
                 std::fstream f(file, std::ios_base::in);

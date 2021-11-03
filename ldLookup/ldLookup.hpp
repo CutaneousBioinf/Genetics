@@ -2,9 +2,10 @@
 #define LDLOOKUP_LDLOOKUP_HPP
 
 #include <algorithm>
+#include <fstream>
 #include <iostream>
 #include <memory>
-#include <fstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -13,7 +14,7 @@
 #define CHECK_FAIL(file, msg) if ((file).fail()) { throw std::runtime_error((msg)); }
 
 /** Standard function to split a string at a delimiter. */
-std::vector<std::string> split_str(const std::string& s, char delimiter);
+std::vector<std::string> split_str(const std::string& s, const char delimiter);
 
 /** Provides fast line-oriented parsing of genetic records.*/
 class RecordParser {
@@ -24,15 +25,24 @@ class RecordParser {
 
         /** Constructs a RecordParser.
          * 
-         * key_index - Index to column of data containing lookup table keys
-         * value_index - Index to column of data containing lookup table values
+         * snp_a_index - Index to column of data containing SNP A values.
+         * snp_b_index - Index to column of data containing SNP B values.
          * r2_index - Index to column of data containing r-squared values
          * delimiter - Character used to separate columns of data
          * min_r2 - Minimum r-squared value to include a key-value pair in the table
          */
-        RecordParser(size_t key_index = 2, size_t value_index = 6,
-                     size_t r2_index = 8, char delimiter = ' ',
-                     float min_r2 = 0);
+        RecordParser(const size_t snp_a_index = 2,
+                     const size_t snp_b_index = 6,
+                     const size_t r2_index = 8,
+                     const char delimiter = ' ',
+                     const float min_r2 = 0) :
+                     snp_a_index(snp_a_index),
+                     snp_b_index(snp_b_index),
+                     r2_index(r2_index),
+                     delimiter(delimiter),
+                     min_r2(min_r2) {
+            last_col_index = std::max({ snp_a_index, snp_b_index, r2_index });
+        }
 
         /** Parses one genetic record.
          * 
@@ -46,8 +56,8 @@ class RecordParser {
         bool parse_line(const std::string& line);
 
     private:
-        int key_index;
-        int value_index;
+        int snp_a_index;
+        int snp_b_index;
         int r2_index;
         char delimiter;
         float min_r2;
@@ -57,8 +67,19 @@ class RecordParser {
 /** Persistently maps genetic markers in linkage disequilibrium. */
 class LDTable {
     public:
+        LDTable(const std::string& name) {
+            open(name);
+        }
+
+        LDTable(const std::string& name,
+                const std::string& source_path,
+                RecordParser parser,
+                const size_t max_key_length) {
+            create(name, source_path, parser, max_key_length);
+        }
+
         /** Opens an existing LDTable by name. */
-        LDTable(const std::string& name);
+        void open(const std::string& name);
 
         /** Creates a new LDTable.
          * 
@@ -67,8 +88,10 @@ class LDTable {
          * parser - RecordParser to transform text data into C++ types.
          * max_key_length - Maximum table key length in bytes.
          */
-        LDTable(const std::string& name, const std::string& source_path,
-                RecordParser parser, const size_t max_key_length);
+        void create(const std::string& name,
+                    const std::string& source_path,
+                    RecordParser parser,
+                    const size_t max_key_length);
 
         /** Fetches values associated with a key */
         std::vector<std::string> get(const std::string& key);
@@ -82,6 +105,8 @@ class LDTable {
 
         void write_key(const std::string& key);
         void write_value(const std::string& value);
+        void write_max_key_length(const size_t max_key_length);
+        const size_t read_max_key_length();
 };
 
 #endif
