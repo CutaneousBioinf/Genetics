@@ -60,9 +60,6 @@ class LDTable {
         /** Opens an existing LDTable by name. */
         LDTable(const std::string& name);
 
-        /** Fetches values associated with a key */
-        std::vector<std::string> get(const std::string& key);
-
         /** Creates a new LDTable.
          * 
          * name - The name of the new LDTable.
@@ -70,10 +67,11 @@ class LDTable {
          * parser - RecordParser to transform text data into C++ types.
          * max_key_length - Maximum table key length in bytes.
          */
-        static void create_table(const std::string& name,
-                                 const std::string& source_path,
-                                 RecordParser parser,
-                                 const size_t max_key_length);
+        LDTable(const std::string& name, const std::string& source_path,
+                RecordParser parser, const size_t max_key_length);
+
+        /** Fetches values associated with a key */
+        std::vector<std::string> get(const std::string& key);
 
     private:
         static const char KEY_DELIMITER = '\n';
@@ -81,6 +79,9 @@ class LDTable {
 
         std::shared_ptr<dht::DiskHash<std::streampos>> hashtable;
         std::fstream file;
+
+        void write_key(const std::string& key);
+        void write_value(const std::string& value);
 };
 
 #endif

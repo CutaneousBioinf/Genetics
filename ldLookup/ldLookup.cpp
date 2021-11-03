@@ -61,12 +61,56 @@ LDTable::LDTable(const std::string& name) {
     // Max key length is the first line of the data file.
     std::string line;
     getline(file, line, KEY_DELIMITER);
-    size_t max_key_length = std::stoi(line);
+    size_t max_key_length;
+    try {
+        max_key_length = std::stoi(line);
+    } catch (std::invalid_argument& e) {
+        std::string msg = "Possible corruption: incorrect table format";
+        throw std::runtime_error(msg);
+    }
 
     path = name + ".dht";
     hashtable.reset(new dht::DiskHash<std::streampos>(path.c_str(),
                                                       max_key_length,
                                                       dht::DHOpenRO));
+}
+
+LDTable::LDTable(const std::string& name, const std::string& source_path,
+                 RecordParser parser, const size_t max_key_length) {
+    std::fstream data(source_path, std::ios_base::in);
+    CHECK_FAIL(data, "Error opening file '" + source_path + "'");
+
+    // Create the LDTable's files on disk.
+    auto table_path = name + ".dat";
+    file.open(table_path, std::ios_base::out | std::ios_base::app);
+    CHECK_FAIL(file, "Error opening file '" + table_path + "'");
+
+    auto dht_path = name + ".dht";
+    hashtable.reset(new dht::DiskHash<std::streampos>(dht_path.c_str(),
+                                                      max_key_length,
+                                                      dht::DHOpenRW));
+
+    // Max key length must be persisted so the hashtable can be reopened.
+    auto s = std::to_string(max_key_length);
+    file.write(s.c_str(), s.size());
+    file.put(KEY_DELIMITER);
+
+    // Populate the LDTable.
+    std::string line, last_snp_a;
+    while (data) {
+        getline(data, line);
+        if (!parser.parse_line(line)) {
+            continue;
+        }
+
+        if (last_snp_a.compare(parser.snp_a)) {
+            write_key(parser.snp_a);
+            last_snp_a = parser.snp_a;
+        }
+
+        write_value(parser.snp_b);
+        CHECK_FAIL(file, "Possible corruption: table not writable");
+    }
 }
 
 std::vector<std::string> LDTable::get(const std::string& key) {
@@ -82,56 +126,16 @@ std::vector<std::string> LDTable::get(const std::string& key) {
     return split_str(line, VALUE_DELIMITER);
 }
 
-void LDTable::create_table(const std::string& name,
-                           const std::string& source_path,
-                           RecordParser parser,
-                           const size_t max_key_length) {
-    std::fstream data(source_path, std::ios_base::in);
-    CHECK_FAIL(data, "Error opening file '" + source_path + "'");
-
-    // Create the LDTable's files on disk.
-    auto table_path = name + ".dat";
-    auto mode = std::ios_base::out | std::ios_base::app;
-    std::fstream table(table_path, mode);
-    CHECK_FAIL(table, "Error opening file '" + table_path + "'");
-
-    auto dht_path = (name + ".dht").c_str();
-    auto hashtable(dht::DiskHash<std::streampos>(dht_path,
-                                                 max_key_length,
-                                                 dht::DHOpenRW));
-
-    // Max key length must be persisted so the hashtable can be reopened.
-    auto s = std::to_string(max_key_length);
-    table.write(s.c_str(), s.size());
-    table.put(KEY_DELIMITER);
-
-    // Populate the LDTable.
-    std::string line, last_snp_a;
-    while (data) {
-        getline(data, line);
-        if (!parser.parse_line(line)) {
-            continue;
-        } else if (parser.snp_a.size() > max_key_length) {
-            std::string msg = "Key '" + parser.snp_a + "' too long";
-            throw std::runtime_error(msg);
-        }
-
-        // Consider adding error-checking for cases where key contains
-        // whitespace (\n, \t, \r\n, etc).
-
-        if (last_snp_a.compare(parser.snp_a)) {
-            table.put(KEY_DELIMITER);
-            std::streampos loc = table.tellp();
-            if (!hashtable.insert(parser.snp_a.c_str(), loc)) {
-                std::string msg = "Duplicate key '" + parser.snp_a;
-                throw std::runtime_error(msg);
-            }
-        }
-
-        last_snp_a = parser.snp_a;
-
-        table.write(parser.snp_b.c_str(), parser.snp_b.size());
-        table.put(VALUE_DELIMITER);
-        CHECK_FAIL(table, "Possible corruption: table not writable");
+void LDTable::write_key(const std::string& key) {
+    file.put(KEY_DELIMITER);
+    std::streampos loc = file.tellp();
+    if (!hashtable->insert(key.c_str(), loc)) {
+        std::string msg = "Duplicate key '" + key;
+        throw std::runtime_error("Duplicate key '" + key);
     }
+}
+
+void LDTable::write_value(const std::string& value) {
+    file.write(value.c_str(), value.size());
+    file.put(VALUE_DELIMITER);
 }
