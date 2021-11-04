@@ -1,3 +1,4 @@
+#include <cmath>
 #include <map>
 
 #include "ldLookup.hpp"
@@ -18,7 +19,7 @@ std::vector<std::string> split_str(const std::string& s, char delimiter) {
 bool RecordParser::parse_line(const std::string& line) {
     size_t end = 0;
     size_t start = line.find_first_not_of(delimiter, end);
-    int col = 0;
+    size_t col = 0;
     while (start != std::string::npos && col <= last_col_index) {
         end = line.find(delimiter, start);
 
@@ -26,6 +27,12 @@ bool RecordParser::parse_line(const std::string& line) {
             snp_a = line.substr(start, end - start);
         } else if (col == snp_b_index) {
             snp_b = line.substr(start, end - start);
+        } else if (col == maf_index) {
+            try {
+                maf = std::stof(line.substr(start, end - start));
+            } catch (std::invalid_argument& e) {
+                return false;
+            }
         } else if (col == r2_index) {
             try {
                 r2 = std::stof(line.substr(start, end - start));
@@ -101,11 +108,10 @@ void LDTable::create(const std::string& name, const std::string& source_path,
             emplace_pair.first->second++;
             num_values = 0;
         }
-
-        // MAF Parsing to be Implemented
-        // map_safe_maf = floor(parser.maf*10_000)
-        // auto emplace_pair(maf_values_map.emplace(parser.maf, 0))
-        // emplace_pair.first->second++;
+        
+        int map_safe_maf(floor(10000 * parser.maf));
+        auto emplace_pair(maf_values_map.emplace(map_safe_maf, 0));
+        emplace_pair.first->second++;
 
         write_value(parser.snp_b);
         num_values++;
@@ -146,7 +152,7 @@ void LDTable::write_max_key_length(const size_t max_key_length) {
     file.put(KEY_DELIMITER);
 }
 
-const size_t LDTable::read_max_key_length() {
+size_t LDTable::read_max_key_length() {
     std::string line;
     getline(file, line, KEY_DELIMITER);
     try {

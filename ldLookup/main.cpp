@@ -43,6 +43,10 @@ int main(int argc, char** argv) {
     description = "Zero-based index to column of data containing lookup table keys";
     create->add_option("-K,--key-index", key_index, description);
 
+    size_t maf_index{ 3 };
+    description = "Zero-based index to column of data containing MAF values";
+    create->add_option("-M,--maf-index", maf_index, description);
+
     size_t value_index{ 6 };
     description = "Zero-based index to column of data containing lookup table values";
     create->add_option("-V,--value-index", value_index, description);
@@ -77,7 +81,8 @@ int main(int argc, char** argv) {
     // Application Logic
     try {
         if (*create) {
-            RecordParser rp{key_index, value_index, r2_index, delimiter, min_r2};
+            RecordParser rp{key_index, maf_index, value_index, r2_index,
+                            delimiter, min_r2};
             LDTable(table, source_path, rp, max_key_length);
         } else if (*retrieve) {
             LDTable opened_table(table);
