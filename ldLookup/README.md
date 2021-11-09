@@ -40,12 +40,13 @@ Positionals:
 
 Options:
   -h,--help                   Print this help message and exit
-  -r,--r2-threshold FLOAT     Minimum r-squared value to include a key-value pair in the table
-  -K,--key-index UINT         Zero-based index to column of data containing lookup table keys
-  -V,--value-index UINT       Zero-based index to column of data containing lookup table values
-  -R,--r2-index UINT          Zero-based index to column of data containing r-squared values
-  -d,--delimiter CHAR         Character used to separate columns of data
-  -k,--keys UINT              Maximum key length in bytes
+  -r,--r2-threshold FLOAT=0   Minimum r-squared value to include a key-value pair in the table
+  -K,--key-index UINT=2       Zero-based index to column of data containing lookup table keys
+  -M,--maf-index UINT=3       Zero-based index to column of data containing MAF values
+  -V,--value-index UINT=6     Zero-based index to column of data containing lookup table values
+  -R,--r2-index UINT=8        Zero-based index to column of data containing r-squared values
+  -d,--delimiter CHAR=        Character used to separate columns of data     # Default value is a space
+  -k,--keys UINT=200          Maximum key length in bytes
 
 >>> ./ldLookupx table retrieve --help
 Retrieve values existing from lookup table
@@ -53,12 +54,12 @@ Usage: ./ldLookupx retrieve [OPTIONS] [file] [keys...]
 
 Positionals:
   file TEXT                   File containing alleles to look up (one per line)
-  keys TEXT ...               Alleles to look up
+  keys TEXT=[] ...            Alleles to look up
 
 Options:
   -h,--help                   Print this help message and exit
   -f,--file TEXT              File containing alleles to look up (one per line)
-  -k,--keys TEXT ...          Alleles to look up
+  -k,--keys TEXT=[] ...       Alleles to look up
 ```
 
 ## Example Usage

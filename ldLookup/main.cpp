@@ -21,6 +21,7 @@ int main(int argc, char** argv) {
 
     description = "ldLookup - lookup and analysis of linkage disequilibrium (LD) between genetic variants";
     CLI::App app{description};
+    app.option_defaults()->always_capture_default();
     app.require_subcommand(1);
 
     // Global Options
