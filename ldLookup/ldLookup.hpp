@@ -13,7 +13,7 @@
 
 #define CHECK_FAIL(file, msg) if ((file).fail()) { throw std::runtime_error((msg)); }
 
-// A general note: when operations fail, these calsses/functions usually throw
+// A general note: when operations fail, these classes/functions usually throw
 // std::runtime_error.
 
 /* Splits `s` at a `delimiter`, ignoring consecutive/leading/trailing delimiters. */

@@ -15,8 +15,13 @@ To install, clone this repo with `git clone  https://github.com/CutaneousBioinf/
 ```
 
 ## Usage
+For context-aware help messages, pass the `-h` or `--help` flags. ldLookup provides three important subcommands: `create`, `retrieve`, and `bin`, documented in detail below.
+- `create` makes new ldLookup tables.
+- `retrieve` gets markers in linkage disequilibrium with a key marker using an existing ldLookup table.
+- `bin` gets markers with similar MAF and number of LD surrogates to a key marker.
+
 ```
->>> ./LdLookupx --help
+>>> ./ldLookupx --help
 ldLookup - lookup and analysis of linkage disequilibrium (LD) between genetic variants
 Usage: ./ldLookupx [OPTIONS] table SUBCOMMAND
 
@@ -29,7 +34,8 @@ Options:
 
 Subcommands:
   create                      Create new lookup table
-  retrieve                    Retrieve values existing from lookup table
+  retrieve                    Retrieve values from existing lookup table
+  bin                         Retrieve markers with similar MAF and number of LD surrogates
 
 >>> ./ldLookupx table create --help
 Create new lookup table
@@ -60,6 +66,20 @@ Options:
   -h,--help                   Print this help message and exit
   -f,--file TEXT              File containing alleles to look up (one per line)
   -k,--keys TEXT=[] ...       Alleles to look up
+
+>>> ./ldLookupx table bin --help
+Retrieve markers with similar MAF and number of LD surrogates
+Usage: ./ldLookupx bin [OPTIONS] maf surrogates
+
+Positionals:
+  maf FLOAT REQUIRED          MAF value to bin
+  surrogates UINT REQUIRED    Number of LD surrogates
+
+Options:
+  -h,--help                   Print this help message and exit
+  -m,--maf FLOAT REQUIRED     MAF value to bin
+  -s,--surrogates UINT REQUIRED
+                              Number of LD surrogates
 ```
 
 ## Example Usage
@@ -85,4 +105,8 @@ ERROR: Nonexistent key 'badKey'
 ERROR: Nonexistent key '1:49554:A:G'
 >>> ./ldLookupx badTable retrieve -k 1:11008:C:G
 ERROR: Error opening file 'badTable.dht': open call failed.
+>>> ./ldLookupx myTable bin -s 2 -m 0.000994036
+...
+Values: ... 1:46285:ATAT:A ...
+...
 ```
