@@ -1,8 +1,8 @@
 # Special ignores
 ldLookupx
 testsx
-*.dht
-*.dat
+*.mvdhdht
+*.mvdhdat
 data/*
 data/**
 .vscode/*
