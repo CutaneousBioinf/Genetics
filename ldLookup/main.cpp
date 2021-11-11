@@ -77,6 +77,7 @@ int main(int argc, char** argv) {
     // 'Bin' Subcommand
     description = "Retrieve markers with similar MAF and number of LD surrogates";
     auto bin = app.add_subcommand("bin", description);
+    bin->option_defaults()->always_capture_default(false);
 
     double maf;
     description = "MAF value to bin";
