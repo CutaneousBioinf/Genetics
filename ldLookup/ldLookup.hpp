@@ -13,29 +13,54 @@
 
 #define CHECK_FAIL(file, msg) if ((file).fail()) { throw std::runtime_error((msg)); }
 
-/* Standard function to split a string at a delimiter. 
- * 
- * Ignores consecutive, leading, and trailing delimiters.
- * 
-*/
+// A general note: when operations fail, these calsses/functions usually throw
+// std::runtime_error.
+
+/* Splits `s` at a `delimiter`, ignoring consecutive/leading/trailing delimiters. */
 std::vector<std::string> split_str(const std::string& s, const char delimiter);
 
 /* Persistent, write-once map of strings to arrays of strings. */
 class VectorDiskHash {
     public:
-        /* Opens an existing VectorDiskHash. */
+        /** Opens an existing VectorDiskHash.
+         * 
+         * Throws std::runtime_error on failure or if the VectorDiskHash
+         * does not exist.
+        */
         VectorDiskHash(const std::string& name);
 
         /* Creates a new VectorDiskHash. */
         VectorDiskHash(const std::string& name, const size_t max_key_size);
 
-        /* Pre-allocates space for values associated with a key. */
+        /** Pre-allocates space for values associated with a key.
+         * 
+         * All values associated with a particular key must be
+         * insert()ed consecutively. Alternatively, space can
+         * be reserve()d for those values, and they can be inserted
+         * as long as space remains.
+         * 
+         * `space` should be as large as the sum of size()s of all values
+         * associated with `key` plus one byte for each value to account
+         * for overhead.
+         * 
+         * Throws std::runtime_error if key already exists or if the
+         * VectorDiskHash was opened from existing files rather than
+         * created.
+         */
         void reserve(const std::string& key, const size_t space);
 
-        /* Associates a value with a key. */
+        /** Associates a value with a key.
+         * 
+         * Throws std::runtime_error if the VectorDiskHash was opened
+         * from existing files rather than created.
+         */
 		void insert(const std::string& key, const std::string& value);
 
-        /* Retrieves values associated with a key. */
+        /** Retrieves values associated with a key. 
+         * 
+         * Throws std::runtime_error if key does not exist or
+         * cannot be retrieved.
+        */
 		std::vector<std::string> get(const std::string& key);
 
     private:
@@ -53,6 +78,7 @@ class VectorDiskHash {
         std::shared_ptr<dht::DiskHash<Location>> hashtable;
         std::fstream file;
         std::string end_of_file_key;
+
 
         void write_max_key_size(const size_t max_key_size);
         size_t read_max_key_size();
@@ -97,6 +123,13 @@ class GeneticDataValidator {
                                                          r2_index }))
                         {}
 
+        /** Parses one line of genetic data into C++ types.
+         * 
+         * If `line` is valid, the `data` member will contain
+         * the parsed data from `line` after this call. If
+         * `line` is invalid, the `data` member may contain
+         * junk.
+         */
 		bool validate(const std::string& line);
 
 	private:
@@ -107,11 +140,18 @@ class GeneticDataValidator {
 /** Provides interface to genetic data. */
 class LDLookup {
 	public:
+        /* Opens an existing LDLookup. */
 		LDLookup(const std::string& name);
+
+        /* Creates a new LDLookup. */
 		LDLookup(const std::string& name,
                  const std::string& source_path,
                  GeneticDataValidator validator);
-		std::vector<std::string> find_ld(const std::string& bin);
+
+        /* Finds markers in linkage disequilibrium with a key marker. */
+		std::vector<std::string> find_ld(const std::string& key);
+
+        /* Find markers with similar MAF and number of LD surrogates. */
 		std::vector<std::string> find_similar(const int surrogate_count, const double maf);
 	
 	private:
@@ -122,6 +162,7 @@ class LDLookup {
         std::shared_ptr<VectorDiskHash> ld_pairs;
         std::shared_ptr<VectorDiskHash> bins;
 		
+        /* Converts an MAF/LD surrogates pair into a key for `bins`. */
 		std::string to_bin_key(const int surrogate_count, const double maf);
 };
 
