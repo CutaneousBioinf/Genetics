@@ -13,107 +13,116 @@
 
 #define CHECK_FAIL(file, msg) if ((file).fail()) { throw std::runtime_error((msg)); }
 
-/** Standard function to split a string at a delimiter. */
+/* Standard function to split a string at a delimiter. 
+ * 
+ * Ignores consecutive, leading, and trailing delimiters.
+ * 
+*/
 std::vector<std::string> split_str(const std::string& s, const char delimiter);
 
-/** Provides fast line-oriented parsing of genetic records.*/
-class RecordParser {
+/* Persistent, write-once map of strings to arrays of strings. */
+class VectorDiskHash {
     public:
-        std::string snp_a;
-        float maf;
-        std::string snp_b;
-        float r2;
+        /* Opens an existing VectorDiskHash. */
+        VectorDiskHash(const std::string& name);
 
-        /** Constructs a RecordParser.
-         * 
-         * snp_a_index - Index to column of data containing SNP A values.
-         * maf_index - Index to column of data containing MAF values.
-         * snp_b_index - Index to column of data containing SNP B values.
-         * r2_index - Index to column of data containing r-squared values
-         * delimiter - Character used to separate columns of data
-         * min_r2 - Minimum r-squared value to include a key-value pair in the table
-         */
-        RecordParser(const size_t snp_a_index = 2,
-                     const size_t maf_index = 3,
-                     const size_t snp_b_index = 6,
-                     const size_t r2_index = 8,
-                     const char delimiter = ' ',
-                     const float min_r2 = 0) :
-                     snp_a_index(snp_a_index),
-                     maf_index(maf_index),
-                     snp_b_index(snp_b_index),
-                     r2_index(r2_index),
-                     delimiter(delimiter),
-                     min_r2(min_r2) {
-            last_col_index = std::max({ snp_a_index, maf_index, snp_b_index,
-                                        r2_index });
-        }
+        /* Creates a new VectorDiskHash. */
+        VectorDiskHash(const std::string& name, const size_t max_key_size);
 
-        /** Parses one genetic record.
-         * 
-         * line - One genetic record in space-delimited format.
-         * 
-         * When a correctly formed line is passed, parse_line returns true. The
-         * class attributes snp_a, maf_a, snp_b, and r2 are updated to the 
-         * values parsed from `line`. When a malformed line is passed,
-         * parse_line returns false and no guarantee about snp_a, snp_b, etc.
-         * is made.
-         */
-        bool parse_line(const std::string& line);
+        /* Pre-allocates space for values associated with a key. */
+        void reserve(const std::string& key, const size_t space);
+
+        /* Associates a value with a key. */
+		void insert(const std::string& key, const std::string& value);
+
+        /* Retrieves values associated with a key. */
+		std::vector<std::string> get(const std::string& key);
 
     private:
-        size_t snp_a_index;
-        size_t maf_index;
-        size_t snp_b_index;
-        size_t r2_index;
-        char delimiter;
-        float min_r2;
-        size_t last_col_index;
+        inline static const char KEY_DELIMITER = '\n';
+        inline static const char VALUE_DELIMITER = '\t';
+        inline static const std::string DATA_EXTENSION = ".mvdhdat";
+        inline static const std::string DHT_EXTENSION = ".mvdhdht";
+
+        struct Location {
+            std::streampos start;
+            std::streampos write_location;
+            size_t reserve_remaining;
+        };
+
+        std::shared_ptr<dht::DiskHash<Location>> hashtable;
+        std::fstream file;
+        std::string end_of_file_key;
+
+        void write_max_key_size(const size_t max_key_size);
+        size_t read_max_key_size();
 };
 
-/** Persistently maps genetic markers in linkage disequilibrium. */
-class LDTable {
-    public:
-        LDTable(const std::string& name) {
-            open(name);
-        }
+/** Provides fast line-oriented parsing of genetic records.*/
+class GeneticDataValidator {
+	public:
+		struct ProcessedData {
+			std::string snp_a;
+			std::string snp_b;
+			double r2;
+			double maf;
+		};
 
-        LDTable(const std::string& name,
-                const std::string& source_path,
-                RecordParser parser,
-                const size_t max_key_length) {
-            create(name, source_path, parser, max_key_length);
-        }
+		char delimiter;
+		size_t snp_a_index;
+		size_t snp_b_index;
+		size_t r2_index;
+		size_t maf_index;
+		double min_r2;
+        size_t max_key_size;
+		ProcessedData data;
 
-        /** Opens an existing LDTable by name. */
-        void open(const std::string& name);
+		GeneticDataValidator(const char delimiter,
+                             const size_t snp_a_index,
+                             const size_t snp_b_index,
+                             const size_t r2_index,
+                             const size_t maf_index,
+                             const double min_r2,
+                             const size_t max_key_size) :
+                        delimiter(delimiter),
+                        snp_a_index(snp_a_index),
+                        snp_b_index(snp_b_index),
+                        r2_index(r2_index),
+                        maf_index(maf_index),
+                        min_r2(min_r2),
+                        max_key_size(max_key_size),
+                        last_important_column(std::max({ snp_a_index,
+                                                         snp_b_index,
+                                                         maf_index,
+                                                         r2_index }))
+                        {}
 
-        /** Creates a new LDTable.
-         * 
-         * name - The name of the new LDTable.
-         * source_path - Path to data used to populate the table.
-         * parser - RecordParser to transform text data into C++ types.
-         * max_key_length - Maximum table key length in bytes.
-         */
-        void create(const std::string& name,
-                    const std::string& source_path,
-                    RecordParser parser,
-                    const size_t max_key_length);
+		bool validate(const std::string& line);
 
-        /** Fetches values associated with a key */
-        std::vector<std::string> get(const std::string& key);
+	private:
+		size_t last_important_column;
+};
 
-    private:
-        static const char KEY_DELIMITER = '\n';
-        static const char VALUE_DELIMITER = '\t';
 
-        std::shared_ptr<dht::DiskHash<std::streampos>> hashtable;
-        std::fstream file;
+/** Provides interface to genetic data. */
+class LDLookup {
+	public:
+		LDLookup(const std::string& name);
+		LDLookup(const std::string& name,
+                 const std::string& source_path,
+                 GeneticDataValidator validator);
+		std::vector<std::string> find_ld(const std::string& bin);
+		std::vector<std::string> find_similar(const int surrogate_count, const double maf);
+	
+	private:
+		inline static const std::string LD_PAIR_EXTENSION = "_ld_pairs";
+        inline static const std::string BINS_EXTENSION = "_bins";
+        static const size_t MAX_BIN_KEY_SIZE = 32;
 
-        void write_key(const std::string& key);
-        void write_value(const std::string& value);
-        void write_max_key_length(const size_t max_key_length);
-        size_t read_max_key_length();
+        std::shared_ptr<VectorDiskHash> ld_pairs;
+        std::shared_ptr<VectorDiskHash> bins;
+		
+		std::string to_bin_key(const int surrogate_count, const double maf);
 };
 
 #endif

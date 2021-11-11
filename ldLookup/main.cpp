@@ -1,9 +1,7 @@
 #include "CLI11.hpp"
 #include "ldLookup.hpp"
 
-void pretty_print_table_entry(const std::string& key,
-                              const std::vector<std::string>& values) {
-    std::cout << "Key: " << key << "\n" << "Values: ";
+void pretty_print_vector(const std::vector<std::string>& values) {
     int i = 0;
     for (auto v : values) {
         if (++i%5 == 0) {
@@ -60,12 +58,12 @@ int main(int argc, char** argv) {
     description = "Character used to separate columns of data";
     create->add_option("-d,--delimiter", delimiter, description);
 
-    size_t max_key_length{ 200 };
-    description = "Maximum key length in bytes";
-    create->add_option("-k,--keys", max_key_length, description);
+    size_t max_key_size{ 200 };
+    description = "Maximum key size in bytes";
+    create->add_option("-k,--keys", max_key_size, description);
 
     // 'Retrieve' Subcommand
-    description = "Retrieve values existing from lookup table";
+    description = "Retrieve values from existing lookup table";
     auto retrieve = app.add_subcommand("retrieve", description);
 
     std::string file;
@@ -76,17 +74,31 @@ int main(int argc, char** argv) {
     description = "Alleles to look up";
     retrieve->add_option("keys,-k,--keys", keys, description);
 
+    // 'Bin' Subcommand
+    description = "Retrieve markers with similar MAF and number of LD surrogates";
+    auto bin = app.add_subcommand("bin", description);
+
+    double maf;
+    description = "MAF value to bin";
+    bin->add_option("maf,-m,--maf", maf, description)->required();
+
+    size_t surrogate_count;
+    description = "Number of LD surrogates";
+    bin->add_option("surrogates,-s,--surrogates", surrogate_count, description)->required();
+
     CLI11_PARSE(app, argc, argv);
 
 
     // Application Logic
     try {
         if (*create) {
-            RecordParser rp{key_index, maf_index, value_index, r2_index,
-                            delimiter, min_r2};
-            LDTable(table, source_path, rp, max_key_length);
+            GeneticDataValidator v{
+                delimiter, key_index, value_index, r2_index, maf_index,
+                min_r2, max_key_size
+            };
+            LDLookup(table, source_path, v);
         } else if (*retrieve) {
-            LDTable opened_table(table);
+            LDLookup ldl(table);
 
             if (file.size()) {
                 std::fstream f(file, std::ios_base::in);
@@ -96,16 +108,23 @@ int main(int argc, char** argv) {
                 std::vector<std::string> values;
                 while (f) {
                     getline(f, line);
-                    values = opened_table.get(line);
-                    pretty_print_table_entry(line, values);
+                    values = ldl.find_ld(line);
+                    std::cout << "Key: " << line << "\nValues: ";
+                    pretty_print_vector(values);
                 }
             }
 
             std::vector<std::string> values;
             for (auto key : keys) {
-                values = opened_table.get(key);
-                pretty_print_table_entry(key, values);
+                values = ldl.find_ld(key);
+                std::cout << "Key: " << key << "\nValues: ";
+                pretty_print_vector(values);
             }
+        } else if (*bin) {
+            LDLookup ldl(table);
+            auto values = ldl.find_similar(surrogate_count, maf);
+            std::cout << "Values: ";
+            pretty_print_vector(values);
         } else {
             throw std::runtime_error("Unknown subcommand passed to the CLI");
         }
