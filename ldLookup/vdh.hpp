@@ -59,8 +59,8 @@ class VectorDiskHash {
     private:
         inline static const char KEY_DELIMITER = '\n';
         inline static const char VALUE_DELIMITER = '\t';
-        inline static const std::string DATA_EXTENSION = ".mvdhdat";
-        inline static const std::string DHT_EXTENSION = ".mvdhdht";
+        inline static const std::string DATA_EXTENSION = ".vdhdat";
+        inline static const std::string DHT_EXTENSION = ".vdhdht";
 
         struct Location {
             std::streampos start;

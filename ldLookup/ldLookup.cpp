@@ -27,7 +27,7 @@ LDLookup::LDLookup(const std::string& name,
     // bins. A bin is identified by a number of LD surrogates and a
     // range of MAF values.
     std::map<std::string, size_t> bin_sizes;
-    GeneticDataValidator::ProcessedData last_key;
+    GeneticData last_key;
     std::string line;
     size_t surrogate_count;
     bool key_found = false;

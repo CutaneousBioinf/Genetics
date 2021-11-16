@@ -6,16 +6,16 @@
 
 #include "global.hpp"
 
+struct GeneticData {
+    std::string snp_a;
+    std::string snp_b;
+    double r2;
+    double maf;
+};
+
 /** Provides fast line-oriented parsing of genetic records.*/
 class GeneticDataValidator {
 	public:
-		struct ProcessedData {
-			std::string snp_a;
-			std::string snp_b;
-			double r2;
-			double maf;
-		};
-
 		char delimiter;
 		size_t snp_a_index;
 		size_t snp_b_index;
@@ -23,7 +23,7 @@ class GeneticDataValidator {
 		size_t maf_index;
 		double min_r2;
         size_t max_key_size;
-		ProcessedData data;
+		GeneticData data;
 
 		GeneticDataValidator(const char delimiter,
                              const size_t snp_a_index,
