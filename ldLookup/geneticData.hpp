@@ -1,8 +1,12 @@
-#ifndef LDLOOKUP_GENETICDATAVALIDATOR_HPP
-#define LDLOOKUP_GENETICDATAVALIDATOR_HPP
+#ifndef LDLOOKUP_GENETICDATA_HPP
+#define LDLOOKUP_GENETICDATA_HPP
 
 #include <algorithm>
+#include <iterator>
+#include <map>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "global.hpp"
 
@@ -57,5 +61,60 @@ class GeneticDataValidator {
 	private:
 		size_t last_important_column;
 };
+
+template <class Key>
+std::map<Key, size_t> bin_histogram(
+    const std::map<Key, size_t>& hist,
+    const size_t n_bins
+) {
+    if (!n_bins || hist.empty()) {
+        return std::map<Key, size_t>();
+    }
+
+    size_t total = 0;
+    for (const auto& [k, v] : hist) {
+        total += v;
+    }
+
+    std::map<Key, size_t> bins;
+    size_t bin_spacing = (total + (n_bins / 2)) / n_bins;
+    size_t bin_size = hist.begin()->second;
+    Key last_cutpoint = hist.begin()->first;
+    for (auto it = std::next(hist.begin()); it != hist.end(); it++) {
+        if (bin_size >= bin_spacing) {
+            bins.insert(std::make_pair(last_cutpoint, bin_size));
+            bin_size = 0;
+            last_cutpoint = it->first;
+        }
+
+        bin_size += it->second;
+    }
+
+    if (bin_size) {
+        bins.insert(std::make_pair(last_cutpoint, bin_size));
+    }
+
+    return bins;
+}
+
+template <class Key, class Value>
+std::vector<Key> get_map_keys(const std::map<Key, Value>& map) {
+    std::vector<Key> ret;
+    for (const auto& [k, v] : map) {
+        ret.push_back(k);
+    }
+    return ret;
+}
+
+template <class T>
+typename std::vector<T>::const_iterator const
+get_first_lte(T t, const std::vector<T> vec) {
+    auto first_gt = std::lower_bound(vec.begin(), vec.end(), t);
+    if (first_gt == vec.begin()) {
+        return vec.end();
+    } else {
+        return first_gt--;
+    }
+}
 
 #endif

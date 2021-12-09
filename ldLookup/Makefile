@@ -5,9 +5,9 @@ CXXFLAGS_PROFILE = $(CXXFLAGS_DEBUG) -pg
 CXXFLAGS_RELEASE = -o3
 
 BINARY_NAME = ldLookupx
-BINARY_DEPS = diskhash/diskhash.o geneticDataValidator.cpp ldLookup.cpp main.cpp vdh.cpp
+BINARY_DEPS = diskhash/diskhash.o geneticData.cpp main.cpp tables.cpp vdh.cpp
 TESTS_NAME = testsx
-TESTS_DEPS = diskhash/diskhash.o geneticDataValidator.cpp ldLookup.cpp main.cpp vdh.cpp
+TESTS_DEPS = diskhash/diskhash.o geneticData.cpp tables.cpp tests.cpp vdh.cpp
 
 release:
 	@$(MAKE) -C diskhash

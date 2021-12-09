@@ -56,6 +56,10 @@ class VectorDiskHash {
         */
 		std::vector<std::string> get(const std::string& key);
 
+        std::string get_name();
+
+        size_t get_max_key_size();
+
     private:
         inline static const char KEY_DELIMITER = '\n';
         inline static const char VALUE_DELIMITER = '\t';
@@ -71,10 +75,12 @@ class VectorDiskHash {
         std::shared_ptr<dht::DiskHash<Location>> hashtable;
         std::fstream file;
         std::string end_of_file_key;
+        std::string name;
+        size_t max_key_size;
 
-
-        void write_max_key_size(const size_t max_key_size);
         size_t read_max_key_size();
+        void write_max_key_size(const size_t max_key_size);
+        void read_until_key_delimiter(std::string& buff);
 };
 
 #endif

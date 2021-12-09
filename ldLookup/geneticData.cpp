@@ -1,6 +1,6 @@
 #include <stdexcept>
 
-#include "geneticDataValidator.hpp"
+#include "geneticData.hpp"
 
 bool GeneticDataValidator::validate(const std::string& line) {
     size_t end = 0;

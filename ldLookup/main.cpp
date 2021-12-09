@@ -1,17 +1,144 @@
 #include "CLI11.hpp"
-#include "ldLookup.hpp"
+#include "geneticData.hpp"
+#include "tables.hpp"
+
+const std::string BINSTABLE_EXT = "_binstable";
+const std::string LDTABLE_EXT = "_ldtable";
+const std::string SNPTABLE_EXT = "_snptable";
 
 void pretty_print_vector(const std::vector<std::string>& values) {
-    int i = 0;
+    std::string sep = "";
     for (auto v : values) {
-        if (++i%5 == 0) {
-            std::cout << "\n";
-        }
-
-        std::cout << v << " ";
+        std::cout << sep << v;
+        sep = " ";
     }
 
     std::cout << "\n";
+}
+
+template <typename F1, typename F2>
+void iterate_genetic_data(
+    const std::string& source_path,
+    GeneticDataValidator validator,
+    F1 on_data,
+    F2 on_new_snp
+) {
+    std::fstream data(source_path, std::ios_base::in);
+    CHECK_FAIL(data, "Error opening file '" + source_path + "'");
+
+    GeneticData last_key;
+    std::string line;
+    size_t ld_pairs = 0;
+    bool key_found = false;
+
+    while (data) {
+        getline(data, line);
+        if (!validator.validate(line)) {
+            continue;
+        }
+
+        if (last_key.snp_a.compare(validator.data.snp_a) && key_found) {
+            on_new_snp(last_key, ld_pairs);
+            last_key = validator.data;
+            ld_pairs = 0;
+        }
+
+        on_data(validator.data);
+        ld_pairs++;
+        key_found = true;
+    }
+
+    if (key_found) {
+        on_new_snp(last_key, ld_pairs);
+    }
+}
+
+void create_tables(
+    const std::string& source_path,
+    const std::string& table,
+    GeneticDataValidator validator,
+    size_t n_ld_bins,
+    size_t n_maf_bins
+) {
+    // First Pass: Populate LDTable and SNPTable.
+    // Also, gather distribution data for MAF/LD.
+    LDTable ldt(table + LDTABLE_EXT, validator.max_key_size);
+    SNPTable snpt(table + SNPTABLE_EXT, validator.max_key_size);
+
+    std::map<size_t, size_t> ld_counts_hist;
+    std::map<double, size_t> maf_counts_hist;
+
+    auto first_pass_on_data = [&ldt] (const GeneticData& data) {
+        ldt.insert(data.snp_a, data.snp_b);
+    };
+
+    auto first_pass_on_new_snp = [&snpt, &ld_counts_hist, &maf_counts_hist] (
+        const GeneticData& data, size_t n_ld_pairs
+    ) {
+        snpt.insert(data.snp_a, n_ld_pairs, data.maf);
+        ld_counts_hist.emplace(n_ld_pairs, 0).first->second++;
+        maf_counts_hist.emplace(data.maf, 0).first->second++;
+    };
+
+    iterate_genetic_data(
+        source_path,
+        validator,
+        first_pass_on_data,
+        first_pass_on_new_snp
+    );
+
+    // Determine bin cutpoints.
+    auto ld_quantiles(get_map_keys(
+        bin_histogram(ld_counts_hist, n_ld_bins)
+    ));
+
+    auto maf_quantiles(get_map_keys(
+        bin_histogram(maf_counts_hist, n_maf_bins)
+    ));
+
+    // Initialize BinsTable.
+    BinsTable bt(table + BINSTABLE_EXT, ld_quantiles, maf_quantiles);
+
+    // Second Pass: Determine exact bin sizes.
+    std::map<std::string, size_t> bin_sizes;
+
+    auto second_pass_on_data = [] (const GeneticData& data) {};
+
+    auto second_pass_on_new_snp = [&bt, &bin_sizes] (
+        const GeneticData& data, size_t n_ld_pairs
+    ) {
+        auto key(bt.bin(n_ld_pairs, data.maf));
+        auto size_added(data.snp_a.size() + 1);
+        bin_sizes.emplace(key, 0).first->second += size_added;
+    };
+
+    iterate_genetic_data(
+        source_path,
+        validator,
+        second_pass_on_data,
+        second_pass_on_new_snp
+    );
+
+    // Reserve space in BinsTable.
+    for (const auto& [bin, size] : bin_sizes) {
+        bt.reserve(bin, size);
+    }
+
+    // Third Pass: Populate BinsTable.
+    auto third_pass_on_data = [] (const GeneticData& data) {};
+
+    auto third_pass_on_new_snp = [&bt, &bin_sizes] (
+        const GeneticData& data, size_t n_ld_pairs
+    ) {
+        bt.insert(bt.bin(n_ld_pairs, data.maf), data.snp_a);
+    };
+
+    iterate_genetic_data(
+        source_path,
+        validator,
+        third_pass_on_data,
+        third_pass_on_new_snp
+    );
 }
 
 int main(int argc, char** argv) {
@@ -93,13 +220,13 @@ int main(int argc, char** argv) {
     // Application Logic
     try {
         if (*create) {
-            GeneticDataValidator v{
-                delimiter, key_index, value_index, r2_index, maf_index,
-                min_r2, max_key_size
+            GeneticDataValidator validator {
+                delimiter, key_index, value_index, r2_index, 
+                maf_index, min_r2, max_key_size
             };
-            LDLookup(table, source_path, v);
+            create_tables(source_path, table, validator, 15, 15);
         } else if (*retrieve) {
-            LDLookup ldl(table);
+            LDTable ldt(table + LDTABLE_EXT);
 
             if (file.size()) {
                 std::fstream f(file, std::ios_base::in);
@@ -109,7 +236,7 @@ int main(int argc, char** argv) {
                 std::vector<std::string> values;
                 while (f) {
                     getline(f, line);
-                    values = ldl.find_ld(line);
+                    values = ldt.get(line);
                     std::cout << "Key: " << line << "\nValues: ";
                     pretty_print_vector(values);
                 }
@@ -117,13 +244,13 @@ int main(int argc, char** argv) {
 
             std::vector<std::string> values;
             for (auto key : keys) {
-                values = ldl.find_ld(key);
+                values = ldt.get(key);
                 std::cout << "Key: " << key << "\nValues: ";
                 pretty_print_vector(values);
             }
         } else if (*bin) {
-            LDLookup ldl(table);
-            auto values = ldl.find_similar(surrogate_count, maf);
+            BinsTable bt(table + BINSTABLE_EXT);
+            auto values = bt.get(bt.bin(surrogate_count, maf));
             std::cout << "Values: ";
             pretty_print_vector(values);
         } else {
