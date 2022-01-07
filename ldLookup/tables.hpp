@@ -1,10 +1,10 @@
 #ifndef LDLOOKUP_TABLES_HPP
 #define LDLOOKUP_TABLES_HPP
 
-#include <map>
+#include <map> // std::map
 #include <memory>
-#include <string>
-#include <vector>
+#include <string> // std::string
+#include <vector> // std::vector
 
 #include "geneticData.hpp"
 #include "vdh.hpp"
@@ -19,10 +19,25 @@ size_t deserialize_ld(const std::string& n_ld_pairs);
 
 double deserialize_maf(const std::string& maf);
 
+/* Allows fuzzy lookup of SNPs by MAF and number of markers in LD */
 class BinsTable {
     public:
+        /**
+         * Opens an existing BinsTable.
+         * 
+         * Parameters:
+         *  name - Name of table to open
+        **/
         BinsTable(const std::string& name);
 
+        /**
+         * Creates a new BinsTable.
+         * 
+         * Parameters:
+         *  name - Name of table to create
+         *  ld_quantiles - Lower bounds for LD bins.
+         *  maf_quantiles - Lower bounds for MAF bins.
+        **/
         BinsTable(
             const std::string& name,
             const std::vector<size_t>& ld_quantiles,

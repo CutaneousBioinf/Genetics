@@ -26,12 +26,16 @@ BinsTable::BinsTable(const std::string& name) {
     try {
         // Load LD pairs bins from the table.
         for (auto ld : table->get(LD_BINS_KEY)) {
-            ld_quantiles.emplace_back(deserialize_ld(ld));
+            if (ld.find("LOW") == std::string::npos) {
+                ld_quantiles.emplace_back(deserialize_ld(ld));
+            }
         }
 
         // Load MAF bins from the table.
         for (auto maf : table->get(MAF_BINS_KEY)) {
-            maf_quantiles.emplace_back(deserialize_maf(maf));
+            if (maf.find("LOW") == std::string::npos) {
+                maf_quantiles.emplace_back(deserialize_maf(maf));
+            }
         }
     } catch (std::invalid_argument& e) {
         throw std::runtime_error("BinsTable Corrupted: Invalid bins");
@@ -79,6 +83,9 @@ void BinsTable::insert(
 }
 
 std::vector<std::string> BinsTable::get(const std::string& bin) {
+    if (bin.find("LOW") != std::string::npos) {
+        return std::vector<std::string>();
+    }
     return table->get(bin);
 }
 
@@ -102,12 +109,12 @@ std::string BinsTable::bin(
     size_t n_ld_pairs,
     double maf
 ) {
-    auto ld_bin(get_first_lte(n_ld_pairs, ld_quantiles));
+    auto ld_bin(get_last_lte(n_ld_pairs, ld_quantiles));
     if (ld_bin == ld_quantiles.end()) {
         return "LOW";
     }
 
-    auto maf_bin(get_first_lte(maf, maf_quantiles));
+    auto maf_bin(get_last_lte(maf, maf_quantiles));
     if (maf_bin == maf_quantiles.end()) {
         return "LOW";
     }

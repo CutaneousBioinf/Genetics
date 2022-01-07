@@ -1,67 +1,146 @@
 #ifndef LDLOOKUP_GENETICDATA_HPP
 #define LDLOOKUP_GENETICDATA_HPP
 
-#include <algorithm>
-#include <iterator>
-#include <map>
-#include <string>
-#include <utility>
-#include <vector>
+#include <algorithm> // std::lower_bound, std::max
+#include <iterator> // std::next, std::prev
+#include <map> // std::map
+#include <stdexcept> // std::invalid_argument
+#include <string> // std::stod, std::string
+#include <utility> // std::make_pair
+#include <vector> // std::vector
 
 #include "global.hpp"
 
+/** 
+ * A simple container class for linkage disequilibrium data.
+ * 
+ * Data Members:
+ *  index_snp_id - Index SNP ID
+ *  ld_snp_id - ID of SNP in LD with index SNP
+ *  ld_score - LD score between SNP_A and SNP_B
+ *  maf - Minor allele frequency of index SNP
+**/
 struct GeneticData {
-    std::string snp_a;
-    std::string snp_b;
-    double r2;
+    std::string index_snp_id;
+    std::string ld_snp_id;
+    double ld_score;
     double maf;
 };
 
-/** Provides fast line-oriented parsing of genetic records.*/
+/* Parses valid lines of linkage disequilibrium (LD) data to GeneticData. */
 class GeneticDataValidator {
 	public:
+        // Separates fields within lines of LD data.
 		char delimiter;
-		size_t snp_a_index;
-		size_t snp_b_index;
-		size_t r2_index;
-		size_t maf_index;
-		double min_r2;
-        size_t max_key_size;
+        // Indices of columns containing fields with which to populate GeneticData.
+        // Column indices are zero-indexed and increment when one or more delimiter
+        // characters are encountered in a line of LD data.
+		size_t index_snp_id_col;
+		size_t ld_snp_id_col;
+		size_t ld_score_col;
+		size_t maf_col;
+        // Lines of LD data with R2 values below this threshold are skipped.
+        double threshold_ld_score;
+        // Lines with index_snp_id fields exceeding this length are skipped.
+        size_t index_snp_id_max_length;
+        // Parsed, validated LD data
 		GeneticData data;
 
 		GeneticDataValidator(const char delimiter,
-                             const size_t snp_a_index,
-                             const size_t snp_b_index,
-                             const size_t r2_index,
-                             const size_t maf_index,
-                             const double min_r2,
-                             const size_t max_key_size) :
+                             const size_t index_snp_id_col,
+                             const size_t ld_snp_id_col,
+                             const size_t ld_score_col,
+                             const size_t maf_col,
+                             const double threshold_ld_score,
+                             const size_t index_snp_id_max_length) :
                         delimiter(delimiter),
-                        snp_a_index(snp_a_index),
-                        snp_b_index(snp_b_index),
-                        r2_index(r2_index),
-                        maf_index(maf_index),
-                        min_r2(min_r2),
-                        max_key_size(max_key_size),
-                        last_important_column(std::max({ snp_a_index,
-                                                         snp_b_index,
-                                                         maf_index,
-                                                         r2_index }))
+                        index_snp_id_col(index_snp_id_col),
+                        ld_snp_id_col(ld_snp_id_col),
+                        ld_score_col(ld_score_col),
+                        maf_col(maf_col),
+                        threshold_ld_score(threshold_ld_score),
+                        index_snp_id_max_length(index_snp_id_max_length),
+                        last_important_column(std::max({ index_snp_id_col,
+                                                         ld_snp_id_col,
+                                                         ld_score_col,
+                                                         maf_col }))
                         {}
 
-        /** Parses one line of genetic data into C++ types.
+        /** 
+         * Attempts to parse one line of LD data. Returns true if
+         * the line is valid.
          * 
-         * If `line` is valid, the `data` member will contain
-         * the parsed data from `line` after this call. If
-         * `line` is invalid, the `data` member may contain
+         * If the line is valid, the data member will contain values parsed
+         * from the line. If the line is invalid, the data member may contain
          * junk.
-         */
-		bool validate(const std::string& line);
+         **/
+		bool validate(const std::string& line) {
+            size_t end = 0;
+            size_t start = line.find_first_not_of(delimiter, end);
+            size_t col = 0;
+
+            // We process columns as little as possible.
+            while (start != std::string::npos && col <= last_important_column) {
+                end = line.find(delimiter, start);
+
+                if (col == index_snp_id_col) {
+                    // index_snp_id_col must be below maximum length
+                    data.index_snp_id = line.substr(start, end - start);
+                    if (data.index_snp_id.size() > index_snp_id_max_length) {
+                        return false;
+                    }
+                } else if (col == ld_snp_id_col) {
+                    data.ld_snp_id = line.substr(start, end - start);
+                } else {
+                    try {
+                        if (col == maf_col) {
+                            // maf_col must be a double
+                            data.maf = std::stod(line.substr(start, end - start));
+                        } else if (col == ld_score_col) {
+                            // ld_score_col must be a double greater than or
+                            // equal to the threshold ld_score
+                            data.ld_score = std::stod(line.substr(start, end - start));
+                            if (data.ld_score < threshold_ld_score) {
+                                return false;
+                            }
+                        }
+                    } catch (std::invalid_argument& ignore) {
+                        // Catches invalid maf and ld_score fields
+                        return false;
+                    }
+                }
+
+                start = line.find_first_not_of(delimiter, end);
+                col++;
+            }
+
+            // The line must contain columns for every data field.
+            return col > last_important_column;
+        }
 
 	private:
 		size_t last_important_column;
 };
 
+/**
+ * Chunks a one-dimensional frequency distribution into bins of roughly
+ * uniform frequencies.
+ * 
+ * Parameters:
+ *  hist: Map representing a histogram. Keys of the map represent the lower
+ *      bound value of one bin of the histogram. Values of the map represent
+ *      the number of observations in the range [key, next greater key).
+ *      ex. The data 0,1,1,2,3,5,8 could be represented by the histograms
+ *      { 0: 1, 1: 2, 2: 1, 3: 1, 5: 1, 8: 1 } or {0: 4, 3: 2, 6: 1}.
+ *  n_bins: Number of uniform bins to create.
+ * 
+ * Returns:
+ *  A histogram with n_bins bins and a roughly even number of items in each
+ *  bin. This histogram represents the same frequency distribution as hist.
+ * 
+ * Example:
+ *  bin_histogram({ 0: 1, 1: 2, 2: 1, 3: 1, 5: 1, 8: 1 }, 2) -> {0: 4, 3: 3}
+ **/
 template <class Key>
 std::map<Key, size_t> bin_histogram(
     const std::map<Key, size_t>& hist,
@@ -71,14 +150,18 @@ std::map<Key, size_t> bin_histogram(
         return std::map<Key, size_t>();
     }
 
+    // Find the total number of items in the histogram.
     size_t total = 0;
     for (const auto& [k, v] : hist) {
         total += v;
     }
 
     std::map<Key, size_t> bins;
+    // Minimum number of items per uniform bin
     size_t bin_spacing = (total + (n_bins / 2)) / n_bins;
+    // Number of items in the current uniform bin
     size_t bin_size = hist.begin()->second;
+    // Lower bound of the current uniform bin
     Key last_cutpoint = hist.begin()->first;
     for (auto it = std::next(hist.begin()); it != hist.end(); it++) {
         if (bin_size >= bin_spacing) {
@@ -97,6 +180,7 @@ std::map<Key, size_t> bin_histogram(
     return bins;
 }
 
+/* Extracts the keys of a map into a vector */
 template <class Key, class Value>
 std::vector<Key> get_map_keys(const std::map<Key, Value>& map) {
     std::vector<Key> ret;
@@ -106,14 +190,15 @@ std::vector<Key> get_map_keys(const std::map<Key, Value>& map) {
     return ret;
 }
 
+/* Gets last item of a vector sorted in ascending order that is <=`t`. */
 template <class T>
 typename std::vector<T>::const_iterator const
-get_first_lte(T t, const std::vector<T> vec) {
-    auto first_gt = std::lower_bound(vec.begin(), vec.end(), t);
+get_last_lte(T t, const std::vector<T>& vec) {
+    auto first_gt = std::upper_bound(vec.begin(), vec.end(), t);
     if (first_gt == vec.begin()) {
         return vec.end();
     } else {
-        return first_gt--;
+        return std::prev(first_gt);
     }
 }
 
