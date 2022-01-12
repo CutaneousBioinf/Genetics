@@ -1,18 +1,18 @@
 #include <algorithm>  // std::random_shuffle
-#include <stdexcept>  // std::invalid_argument, out_of_range, and runtime_error
+#include <stdexcept>  // std::invalid_argument,  std::out_of_range, std::runtime_error
 
 #include "tables.hpp"
 
-std::string serialize_ld(size_t n_ld_pairs) {
-    return std::to_string(n_ld_pairs);
+std::string serialize_surrogates(size_t surrogate_count) {
+    return std::to_string(surrogate_count);
 }
 
 std::string serialize_maf(double maf) {
     return std::to_string(maf);
 }
 
-size_t deserialize_ld(const std::string& n_ld_pairs) {
-    return std::stoul(n_ld_pairs);
+size_t deserialize_surrogates(const std::string& surrogate_count) {
+    return std::stoul(surrogate_count);
 }
 
 double deserialize_maf(const std::string& maf) {
@@ -25,9 +25,11 @@ BinsTable::BinsTable(const std::string& name) {
 
     try {
         // Load LD pairs bins from the table.
-        for (auto ld : table->get(LD_BINS_KEY)) {
-            if (ld.find("LOW") == std::string::npos) {
-                ld_quantiles.emplace_back(deserialize_ld(ld));
+        for (auto surrogates : table->get(LD_BINS_KEY)) {
+            if (surrogates.find("LOW") == std::string::npos) {
+                surrogate_quantiles.emplace_back(
+                    deserialize_surrogates(surrogates)
+                );
             }
         }
 
@@ -48,18 +50,18 @@ BinsTable::BinsTable(const std::string& name) {
 
 BinsTable::BinsTable(
     const std::string& name,
-    const std::vector<size_t>& ld_quantiles,
+    const std::vector<size_t>& surrogate_quantiles,
     const std::vector<double>& maf_quantiles
 ) {
     // Prepare the table.
     table.reset(new VectorDiskHash(name, MAX_KEY_SIZE));
 
-    this->ld_quantiles = ld_quantiles;
+    this->surrogate_quantiles = surrogate_quantiles;
     this->maf_quantiles = maf_quantiles;
 
     // Save LD pairs bins in the table.
-    for (auto ld : ld_quantiles) {
-        table->insert(LD_BINS_KEY, serialize_ld(ld));
+    for (auto surrogates : surrogate_quantiles) {
+        table->insert(LD_BINS_KEY, serialize_surrogates(surrogates));
     }
 
     // Save MAF bins in the table.
@@ -106,11 +108,11 @@ std::vector<std::string> BinsTable::get_random(
 }
 
 std::string BinsTable::bin(
-    size_t n_ld_pairs,
+    size_t surrogate_count,
     double maf
 ) {
-    auto ld_bin(get_last_lte(n_ld_pairs, ld_quantiles));
-    if (ld_bin == ld_quantiles.end()) {
+    auto surrogate_bin(get_last_lte(surrogate_count, surrogate_quantiles));
+    if (surrogate_bin == surrogate_quantiles.end()) {
         return "LOW";
     }
 
@@ -120,7 +122,9 @@ std::string BinsTable::bin(
     }
 
     auto key(
-        serialize_ld(*ld_bin) + FIELD_SEPARATOR + serialize_maf(*maf_bin)
+        serialize_surrogates(*surrogate_bin)
+        + FIELD_SEPARATOR
+        + serialize_maf(*maf_bin)
     );
     return key;
 }
@@ -135,11 +139,13 @@ SNPTable::SNPTable(const std::string& name, const size_t max_key_size) {
 
 void SNPTable::insert(
     const std::string& snp,
-    const size_t n_ld_pairs,
+    const size_t surrogate_count,
     const double maf
 ) {
     auto val(
-        serialize_ld(n_ld_pairs) + FIELD_SEPARATOR + serialize_maf(maf)
+        serialize_surrogates(surrogate_count)
+        + FIELD_SEPARATOR
+        + serialize_maf(maf)
     );
     table->insert(snp, val);
 }
@@ -147,9 +153,9 @@ void SNPTable::insert(
 std::pair<size_t, double> SNPTable::get(const std::string& snp) {
     try {
         auto val(split_str(table->get(snp).at(0), FIELD_SEPARATOR));
-        auto n_ld_pairs(deserialize_ld(val.at(0)));
+        auto surrogate_count(deserialize_surrogates(val.at(0)));
         auto maf(deserialize_maf(val.at(1)));
-        return std::pair<size_t, double>(n_ld_pairs, maf);
+        return std::pair<size_t, double>(surrogate_count, maf);
     } catch (std::invalid_argument& e) {
         auto msg("SNPTable Corrupted: Malformed Key '" + snp + "'");
         throw std::runtime_error(msg);
@@ -167,8 +173,8 @@ LDTable::LDTable(const std::string& name, const size_t max_key_size) {
     table.reset(new VectorDiskHash(name, max_key_size));
 }
 
-void LDTable::insert(const std::string& snp, const std::string& ld_surrogate) {
-    table->insert(snp, ld_surrogate);
+void LDTable::insert(const std::string& snp, const std::string& ld_snp) {
+    table->insert(snp, ld_snp);
 }
 
 std::vector<std::string> LDTable::get(const std::string& snp) {

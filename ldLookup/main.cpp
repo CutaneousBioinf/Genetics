@@ -262,7 +262,7 @@ int main(int argc, char** argv) {
     app.require_subcommand(1);
 
     std::string name;
-    description = "Identifier for tables operated on by this command";
+    description = "Specifies the dataset to operate on";
     app.add_option("name,-n,--name", name, description)->required();
 
     // 'create' Subcommand
@@ -345,7 +345,6 @@ int main(int argc, char** argv) {
     bin_snp->add_option("keys,-k,--keys", bin_snp_keys, description);
 
     CLI11_PARSE(app, argc, argv);
-
 
     // Application Logic
     try {
