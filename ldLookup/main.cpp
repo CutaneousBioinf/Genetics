@@ -259,18 +259,18 @@ int main(int argc, char** argv) {
     app.require_subcommand(1);
 
     std::string name;
-    description = "Specifies the dataset to operate on";
+    description = "Specifies the dataset to operate on (See 'ldLookup create')";
     app.add_option("name,-n,--name", name, description)->required();
 
     // 'create' Subcommand
-    auto create = app.add_subcommand("create", "Create ldLookup tables from LD data");
+    auto create = app.add_subcommand("create", "Create a new dataset from LD data");
 
     std::string create_path;
-    description = "File containing source LD data";
+    description = "File containing LD data";
     create->add_option("path,-p,--path", create_path, description)->required();
 
     float threshold_ld_score{ 0 };
-    description = "Minimum LD score, as determined by r-squared value, for genetic markers to be processed";
+    description = "LD score (as measured by R^2) below which a genetic marker will be ignored";
     create->add_option("-t,--threshold", threshold_ld_score, description);
 
     size_t index_snp_id_col{ 2 };
@@ -282,7 +282,7 @@ int main(int argc, char** argv) {
     create->add_option("-M,--maf-col", maf_col, description);
 
     size_t ld_snp_id_col{ 6 };
-    description = "Zero-based index to column of data containing IDs of SNPs in LD with index SNP";
+    description = "Zero-based index to column of data containing IDs for SNPs in LD with the index SNP";
     create->add_option("-L,--ld-snp-id-column", ld_snp_id_col, description);
 
     size_t ld_score_col{ 8 };
@@ -295,7 +295,7 @@ int main(int argc, char** argv) {
 
     size_t max_key_size{ 200 };
     description = "Maximum index SNP ID length in bytes";
-    create->add_option("-k,--keys", max_key_size, description);
+    create->add_option("-k,--key-size-limit", max_key_size, description);
 
     size_t n_ld_bins{ 15 };
     description = "Approximate number of groupings for index SNPs by number of LD surrogates";
@@ -314,7 +314,7 @@ int main(int argc, char** argv) {
     retrieve->add_option("path,-p,--path", retrieve_path, description);
 
     std::vector<std::string> retrieve_keys;
-    description = "Space-separated SNP IDs to retrieve";
+    description = "Additional space-separated SNP IDs to retrieve";
     retrieve->add_option("keys,-k,--keys", retrieve_keys, description);
 
     // 'Bin' Subcommand
@@ -338,7 +338,7 @@ int main(int argc, char** argv) {
     bin_snp->add_option("path,-p,--path", bin_snp_path, description);
 
     std::vector<std::string> bin_snp_keys;
-    description = "Space-separated SNP IDs to bin";
+    description = "Additional space-separated SNP IDs to bin";
     bin_snp->add_option("keys,-k,--keys", bin_snp_keys, description);
 
     CLI11_PARSE(app, argc, argv);

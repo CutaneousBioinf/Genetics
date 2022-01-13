@@ -4,9 +4,9 @@ CXXFLAGS_DEBUG = -g3
 CXXFLAGS_PROFILE = $(CXXFLAGS_DEBUG) -pg
 CXXFLAGS_RELEASE = -o3
 
-BINARY_NAME = ldLookupx
+BINARY_NAME = ldLookup.exe
 BINARY_DEPS = diskhash/diskhash.o geneticData.hpp main.cpp tables.cpp vdh.cpp
-TESTS_NAME = testsx
+TESTS_NAME = tests.exe
 TESTS_DEPS = diskhash/diskhash.o geneticData.hpp tables.cpp tests.cpp vdh.cpp
 
 release:
