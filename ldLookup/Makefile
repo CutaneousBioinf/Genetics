@@ -1,5 +1,5 @@
 DEFAULT_GOAL = release
-CXXFLAGS_ALL = -std=c++17 -Wextra -Wall -Wpedantic
+CXXFLAGS_ALL = -std=c++17 -Wextra -Wall -Wpedantic -fsanitize=address,leak,undefined
 CXXFLAGS_DEBUG = -g3
 CXXFLAGS_PROFILE = $(CXXFLAGS_DEBUG) -pg
 CXXFLAGS_RELEASE = -o3
