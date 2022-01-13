@@ -95,8 +95,8 @@ void VectorDiskHash::insert(const std::string& key, const std::string& value) {
             // Create the hashtable entry for key.
             // Do this here because loc.start must point to the start
             // of the key's values.
-            Location loc{file.tellp(), 0, 0};
-            hashtable->insert(key.c_str(), loc);
+            Location start_loc{file.tellp(), 0, 0};
+            hashtable->insert(key.c_str(), start_loc);
             // Insert the new value.
             file.write(value_str, value_size);
             end_of_file_key = key;
