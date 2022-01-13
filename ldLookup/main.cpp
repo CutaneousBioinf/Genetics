@@ -48,37 +48,35 @@ void iterate_genetic_data(
     std::fstream data(source_path, std::ios_base::in);
     CHECK_FAIL(data, "Error opening file '" + source_path + "'");
 
-    GeneticData last_record;
     std::string line;
     size_t ld_pairs = 0;
-    bool record_found = false;
+    GeneticData curr;
 
-    while (data) {
-        getline(data, line);
+    while (getline(data, line)) {
         if (!validator.validate(line)) {
             continue;
         }
 
-        if (last_record.index_snp_id.compare(validator.data.index_snp_id)
-            && record_found) {
-            on_new_snp(
-                last_record.index_snp_id,
-                last_record.maf,
-                ld_pairs
-            );
-            last_record = validator.data;
+        if (curr.index_snp_id.compare(validator.data.index_snp_id)) {
+            if (ld_pairs) {
+                on_new_snp(
+                    curr.index_snp_id,
+                    curr.maf,
+                    ld_pairs
+                );
+            }
+            curr = validator.data;
             ld_pairs = 0;
         }
 
         on_data(validator.data);
         ld_pairs++;
-        record_found = true;
     }
 
-    if (record_found) {
+    if (ld_pairs) {
         on_new_snp(
-            last_record.index_snp_id,
-            last_record.maf,
+            curr.index_snp_id,
+            curr.maf,
             ld_pairs
         );
     }
@@ -196,8 +194,7 @@ void do_retrieval(
         CHECK_FAIL(f, "Failed to open file " + keys_path);
 
         std::string line;
-        while (f) {
-            getline(f, line);
+        while (getline(f, line)) {
             std::vector<std::string> values = ldt.get(line);
             pretty_print_key_and_values(line, values);
         }
@@ -220,6 +217,7 @@ void do_bin(
     pretty_print_vector(values);
 }
 
+
 void do_bin_snp(
     BinsTable& bt,
     SNPTable& snpt,
@@ -231,8 +229,7 @@ void do_bin_snp(
         CHECK_FAIL(f, "Failed to open file " + keys_path);
 
         std::string line;
-        while (f) {
-            getline(f, line);
+        while (getline(f, line)) {
             auto maf_and_surrogates = snpt.get(line);
             auto values = bt.get(bt.bin(
                 maf_and_surrogates.first,
