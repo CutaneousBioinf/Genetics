@@ -254,7 +254,7 @@ void subcommand_create(CLI::App& app) {
     create->add_option(
         "name,--name",
         opts->name,
-        "Specifies the dataset to operate on (See 'ldLookup create')"
+        "Specifies a name for the created dataset"
     )->required();
 
     create->add_option(
@@ -325,8 +325,8 @@ void subcommand_create(CLI::App& app) {
         opts->validator.ld_snp_id_col--;
         opts->validator.maf_col--;
         create_tables(
-            opts->name,
             opts->data_path,
+            opts->name,
             opts->validator,
             opts->n_ld_bins,
             opts->n_maf_bins
@@ -473,7 +473,7 @@ void subcommand_distribute(CLI::App& app) {
     );
 
     distribute->add_option(
-        "districbutions,-d,--distributions",
+        "-d,--distributions",
         opts->n_distributions,
         "Number of distributions to generate"
     );
