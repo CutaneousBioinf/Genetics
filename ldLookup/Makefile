@@ -1,12 +1,12 @@
 DEFAULT_GOAL = release
 CXXFLAGS_ALL = -std=c++17 -Wextra -Wall -Wpedantic
 CXXFLAGS_DEBUG = -g3 -fsanitize=address,leak,undefined
-CXXFLAGS_PROFILE = $(CXXFLAGS_DEBUG) -pg
+CXXFLAGS_PROFILE = -g3 -pg
 CXXFLAGS_RELEASE = -o3
 
-BINARY_NAME = ldLookup.exe
+BINARY_NAME = ldLookup
 BINARY_DEPS = diskhash/diskhash.o geneticData.hpp main.cpp tables.cpp vdh.cpp
-TESTS_NAME = tests.exe
+TESTS_NAME = tests
 TESTS_DEPS = diskhash/diskhash.o geneticData.hpp tables.cpp tests.cpp vdh.cpp
 
 release:
@@ -25,6 +25,5 @@ profile:
 	g++ $(CXXFLAGS_ALL) $(CXXFLAGS_PROFILE) $(TESTS_DEPS) -o $(TESTS_NAME)
 
 clean:
-	find . -name '*.o' -delete
-	find . -name '*.so' -delete
+	find . -name '*.o *.out *.so' -delete
 	rm -f diskhash/disktest $(BINARY_NAME) $(TESTS_NAME)
