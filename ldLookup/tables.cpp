@@ -1,8 +1,8 @@
 #include <algorithm>  // std::random_shuffle
-#include <random>
 #include <stdexcept>  // std::invalid_argument,  std::out_of_range, std::runtime_error
 
 #include "tables.hpp"
+#include "utils.hpp"
 
 std::string serialize_surrogates(size_t surrogate_count) {
     return std::to_string(surrogate_count);
@@ -96,20 +96,10 @@ std::vector<std::string> BinsTable::get_random(
     const std::string& bin,
     size_t n_random
 ) {
-    auto snp_vec(get(bin));
-    if (snp_vec.size() == 0) {
+    if (bin.find("LOW") != std::string::npos) {
         return std::vector<std::string>();
     }
-
-    std::vector<std::string> random_snps;
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dist(0, snp_vec.size() - 1);
-    for (size_t i = 0; i < n_random; i++) {
-        random_snps.push_back(snp_vec.at(dist(gen)));
-    }
-
-    return random_snps;
+    return table->get_random(bin, n_random);
 }
 
 std::string BinsTable::bin(

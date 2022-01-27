@@ -1,6 +1,7 @@
 #include "CLI11.hpp"
 #include "geneticData.hpp"
 #include "tables.hpp"
+#include "utils.hpp"
 
 const std::string BINSTABLE_EXT = "_binstable";
 const std::string LDTABLE_EXT = "_ldtable";

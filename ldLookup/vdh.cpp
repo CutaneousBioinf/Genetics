@@ -1,19 +1,8 @@
 #include <iterator> // std::fill_n
+#include <string_view> // std::string_view
 
 #include "vdh.hpp"
-
-std::vector<std::string> split_str(const std::string& s, char delimiter) {
-    std::vector<std::string> ret;
-    ret.reserve(s.length() / 2); // for performance reasons
-    size_t end = 0;
-    size_t start = s.find_first_not_of(delimiter, end);
-    while (start != std::string::npos) {
-	    end = s.find(delimiter, start);
-	    ret.emplace_back(s.substr(start, end - start));
-        start = s.find_first_not_of(delimiter, end);
-    }
-    return ret;
-}
+#include "utils.hpp"
 
 VectorDiskHash::VectorDiskHash(const std::string& name) {
     auto data_path = name + DATA_EXTENSION;
@@ -150,6 +139,38 @@ std::vector<std::string> VectorDiskHash::get(const std::string& key) {
     // This is important because insert() can produce extra leading
     // delimiters.
     return split_str(line, VALUE_DELIMITER);
+}
+
+std::vector<std::string> VectorDiskHash::get_random(
+    const std::string& key, 
+    size_t n_random
+) {
+    Location* loc = hashtable->lookup(key.c_str());
+    if (loc == NULL) {
+        throw std::runtime_error(
+            "VectorDiskHash '" + name + "': Nonexistent Key '" + key + "'"
+        );
+    }
+
+    file.seekg(loc->start);
+    std::string line;
+    read_until_key_delimiter(line);
+
+    std::string_view line_view = line;
+    // split_str ignores leading delimiters.
+    // This is important because insert() can produce extra leading
+    // delimiters.
+    std::vector<std::string_view> split_views {
+        split_str(line_view, VALUE_DELIMITER)
+    };
+    
+    auto random_choices = sample_with_replacement(split_views, n_random);
+    std::vector<std::string> ret;
+    for (std::string_view sv : random_choices) {
+        ret.emplace_back(std::string(sv));
+    }
+
+    return ret;
 }
 
 size_t VectorDiskHash::read_max_key_size() {

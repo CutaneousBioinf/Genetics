@@ -7,10 +7,6 @@
 #include <vector>
 
 #include "diskhash/diskhash.hpp"
-#include "global.hpp"
-
-/* Splits `s` at a `delimiter`, ignoring consecutive/leading/trailing delimiters. */
-std::vector<std::string> split_str(const std::string& s, const char delimiter);
 
 /* Persistent, write-once map of strings to arrays of strings. */
 class VectorDiskHash {
@@ -55,6 +51,13 @@ class VectorDiskHash {
          * cannot be retrieved.
         */
 		std::vector<std::string> get(const std::string& key);
+
+        /** Randomy chooses n_random values associated with a key (with replacement).
+         * 
+         * Throws std::runtime_error if key does not exist or
+         * cannot be retrieved.
+        */
+        std::vector<std::string> get_random(const std::string& key, size_t n_random);
 
         std::string get_name();
 

@@ -5,9 +5,9 @@ CXXFLAGS_PROFILE = -g3 -pg
 CXXFLAGS_RELEASE = -o3
 
 BINARY_NAME = ldLookup
-BINARY_DEPS = diskhash/diskhash.o geneticData.hpp main.cpp tables.cpp vdh.cpp
+BINARY_DEPS = diskhash/diskhash.o geneticData.hpp main.cpp tables.cpp utils.cpp vdh.cpp
 TESTS_NAME = tests
-TESTS_DEPS = diskhash/diskhash.o geneticData.hpp tables.cpp tests.cpp vdh.cpp
+TESTS_DEPS = diskhash/diskhash.o geneticData.hpp tables.cpp tests.cpp utils.cpp vdh.cpp
 
 release:
 	@$(MAKE) -C diskhash

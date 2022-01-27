@@ -95,10 +95,7 @@ class BinsTable {
         );
 
         /**
-         * Retrieves a random subset of the SNPs associated with a bin.
-         * 
-         * If the bin does not contain enough SNPs, all of the SNPs are
-         * returned.
+         * Samples a random set of SNPs associated with a bin (with replacement).
          * 
          * Parameters:
          *  bin - String from BinsTable.bin()

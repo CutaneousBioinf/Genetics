@@ -9,8 +9,6 @@
 #include <utility> // std::make_pair
 #include <vector> // std::vector
 
-#include "global.hpp"
-
 /** 
  * A simple container class for linkage disequilibrium data.
  * 
