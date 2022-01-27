@@ -4,11 +4,12 @@
 
 std::vector<std::string> split_str(const std::string& s, char delimiter) {
     std::vector<std::string> ret;
+    ret.reserve(s.length() / 2); // for performance reasons
     size_t end = 0;
     size_t start = s.find_first_not_of(delimiter, end);
     while (start != std::string::npos) {
 	    end = s.find(delimiter, start);
-	    ret.push_back(s.substr(start, end - start));
+	    ret.emplace_back(s.substr(start, end - start));
         start = s.find_first_not_of(delimiter, end);
     }
     return ret;
