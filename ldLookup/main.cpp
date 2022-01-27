@@ -6,22 +6,27 @@ const std::string BINSTABLE_EXT = "_binstable";
 const std::string LDTABLE_EXT = "_ldtable";
 const std::string SNPTABLE_EXT = "_snptable";
 
-void pretty_print_vector(const std::vector<std::string>& values) {
-    std::string sep = "";
+/*************************************************/
+/***             Utility Functions             ***/
+/*************************************************/
+
+void print_vector(const std::vector<std::string>& values) {
+    std::string sep = "\t";
     for (auto v : values) {
         std::cout << sep << v;
-        sep = " ";
+        sep = "\n\t";
     }
 
     std::cout << "\n";
 }
 
-void pretty_print_key_and_values(
-    const std::string key,
+template <typename Key>
+void print_key_and_values(
+    const Key key,
     const std::vector<std::string>& values
 ) {
-    std::cout << "Key: " << key << "\nValues:\n";
-    pretty_print_vector(values);
+    std::cout << key << "\n";
+    print_vector(values);
     std::cout << "\n";
 }
 
@@ -162,8 +167,8 @@ void create_tables(
     );
 
     // Reserve space in BinsTable.
-    for (const auto& [bin, size] : bin_sizes) {
-        bt.reserve(bin, size);
+    for (const auto& bin_and_size : bin_sizes) {
+        bt.reserve(bin_and_size.first, bin_and_size.second);
     }
 
     // Third Pass: Populate BinsTable.
@@ -183,11 +188,11 @@ void create_tables(
     );
 }
 
-
-void do_retrieval(
-    LDTable& ldt,
+template<typename F>
+void iterate_keys(
     const std::string& keys_path,
-    const std::vector<std::string>& keys
+    const std::vector<std::string>& keys,
+    F on_key
 ) {
     if (keys_path.size()) {
         std::fstream f(keys_path, std::ios_base::in);
@@ -195,60 +200,322 @@ void do_retrieval(
 
         std::string line;
         while (getline(f, line)) {
-            std::vector<std::string> values = ldt.get(line);
-            pretty_print_key_and_values(line, values);
+            on_key(line);
         }
     }
 
     for (auto key : keys) {
-        std::vector<std::string> values = ldt.get(key);
-        pretty_print_key_and_values(key, values);
+        on_key(key);
     }
 }
 
 
-void do_bin(
-    BinsTable& bt,
-    const double maf,
-    const size_t surrogate_count
-) {
-    auto values = bt.get(bt.bin(surrogate_count, maf));
-    std::cout << "Key: " << maf << " " << surrogate_count<< "\nValues:\n";
-    pretty_print_vector(values);
+/************************************************/
+/***          Command Line Interface          ***/
+/************************************************/
+
+struct SubcommandOptsCreate {
+    std::string name;
+    std::string data_path;
+    GeneticDataValidator validator{ ' ', 3, 7, 9, 4, 0.0, 200 };
+    size_t n_ld_bins = 15;
+    size_t n_maf_bins = 15;
+};
+
+struct SubcommandOptsGetLD {
+    std::string name;
+    std::string path_to_markers = "";
+    std::vector<std::string> cli_markers = std::vector<std::string>();
+};
+
+struct SubcommandOptsGetSimilarByValue {
+    std::string name;
+    double target_maf;
+    size_t target_surrogate_count;
+};
+
+struct SubcommandOptsGetSimilarBySNP {
+    std::string name;
+    std::string path_to_markers = "";
+    std::vector<std::string> cli_markers = std::vector<std::string>();
+};
+
+struct SubcommandOptsDistribute {
+    std::string name;
+    std::string path_to_markers = "";
+    std::vector<std::string> cli_markers = std::vector<std::string>();
+    size_t n_distributions = 1;
+};
+
+void subcommand_create(CLI::App& app) {
+    auto opts = std::make_shared<SubcommandOptsCreate>();
+    auto create = app.add_subcommand("create", "Create a new dataset from LD data");
+
+    create->add_option(
+        "name,--name",
+        opts->name,
+        "Specifies the dataset to operate on (See 'ldLookup create')"
+    )->required();
+
+    create->add_option(
+        "path,-p,--path",
+        opts->data_path, 
+    "File containing LD data"
+    )->required();
+
+    create->add_option(
+        "-t,--threshold",
+        opts->validator.threshold_ld_score,
+        "LD score (as measured by R^2) below which a marker will be ignored"
+    );
+
+    create->add_option(
+        "-I,--index-snp-id-column",
+        opts->validator.index_snp_id_col,
+        "Index to column of data containing index SNP IDs"
+    );
+
+    create->add_option(
+        "-M,--maf-col",
+        opts->validator.maf_col,
+        "Index to column of data containing MAFs for index SNPs"
+    );
+
+    create->add_option(
+        "-L,--ld-snp-id-column",
+        opts->validator.ld_snp_id_col,
+        "Index to column of data containing IDs for SNPs in LD with the index SNP"
+    );
+
+    create->add_option(
+        "-R,--r2-index",
+        opts->validator.ld_score_col,
+        "Index to column of data containing r-squared values"
+    );
+
+    create->add_option(
+        "-d,--delimiter",
+        opts->validator.delimiter,
+        "Character used to separate columns of data"
+    );
+
+    create->add_option(
+        "-k,--key-size-limit", 
+        opts->validator.index_snp_id_max_length, 
+        "Maximum index SNP ID length in bytes"
+    );
+
+    create->add_option(
+        "-l,--ld-bin-count",
+        opts->n_ld_bins,
+        "Approximate number of groupings for index SNPs by number of LD surrogates"
+    );
+
+    create->add_option(
+        "-m,--maf-bin-count",
+        opts->n_maf_bins,
+        "Approximate number of groupings for index SNPs by MAF"
+    );
+
+    create->callback([opts]() {
+        // These parameters are passed/default to one-indexed columns.
+        // They need to be zero-indexed.
+        opts->validator.index_snp_id_col--;
+        opts->validator.ld_score_col--;
+        opts->validator.ld_snp_id_col--;
+        opts->validator.maf_col--;
+        create_tables(
+            opts->name,
+            opts->data_path,
+            opts->validator,
+            opts->n_ld_bins,
+            opts->n_maf_bins
+        );
+    });
 }
 
+void subcommand_get_ld(CLI::App& app) {
+    auto opts = std::make_shared<SubcommandOptsGetLD>();
+    auto get_ld = app.add_subcommand(
+        "get_ld", "Get markers in LD with a particular index marker"
+    );
 
-void do_bin_snp(
-    BinsTable& bt,
-    SNPTable& snpt,
-    const std::string& keys_path,
-    const std::vector<std::string>& keys
-) {
-    if (keys_path.size()) {
-        std::fstream f(keys_path, std::ios_base::in);
-        CHECK_FAIL(f, "Failed to open file " + keys_path);
+    get_ld->add_option(
+        "name,--name",
+        opts->name,
+        "Specifies the dataset to operate on (See 'ldLookup create')"
+    )->required();
 
-        std::string line;
-        while (getline(f, line)) {
-            auto maf_and_surrogates = snpt.get(line);
+    get_ld->add_option(
+        "path_to_markers,-p,--path-to-markers",
+        opts->path_to_markers,
+        "File containing newline-separated index SNP IDs"
+    );
+
+    get_ld->add_option(
+        "markers,-m,--markers",
+        opts->cli_markers,
+        "Additional space-separated SNP IDs"
+    );
+
+    get_ld->callback([opts]() {
+        LDTable ldt(opts->name + LDTABLE_EXT);
+        auto do_get_ld = [&ldt] (const std::string& snp) {
+            std::vector<std::string> values = ldt.get(snp);
+            print_key_and_values(snp, values);
+        };
+        iterate_keys(opts->path_to_markers, opts->cli_markers, do_get_ld);
+    });
+}
+
+void subcommand_get_similar_by_value(CLI::App& app) {
+    auto opts = std::make_shared<SubcommandOptsGetSimilarByValue>();
+    auto similar_by_value = app.add_subcommand(
+        "similar_by_value",
+        "Retrieve markers with MAF and number of LD surrogates near target values"
+    );
+
+    similar_by_value->add_option(
+        "target_maf,-m,--target-maf",
+        opts->target_maf, 
+        "Target MAF value"
+    )->required();
+
+    similar_by_value->add_option(
+        "target_surrogates,-s,--target-surrogates",
+        opts->target_surrogate_count,
+        "Target number of LD surrogates"
+    )->required();
+
+    similar_by_value->callback([opts]() {
+        BinsTable bt(opts->name + BINSTABLE_EXT);
+        SNPTable snpt(opts->name + SNPTABLE_EXT);
+        auto values = bt.get(
+            bt.bin(opts->target_surrogate_count, opts->target_maf)
+        );
+
+        std::string key = serialize_maf(opts->target_maf) 
+                        + " " 
+                        + serialize_surrogates(opts->target_surrogate_count);
+        print_key_and_values(key, values);
+    });
+}
+
+void subcommand_get_similar_by_snp(CLI::App& app) {
+    auto opts = std::make_shared<SubcommandOptsGetSimilarBySNP>();
+    auto similar_by_snp = app.add_subcommand(
+        "similar_by_snp",
+        "Retrieve markers with MAF and number of LD surrogates similar to a key marker"
+    );
+
+    similar_by_snp->add_option(
+        "name,--name",
+        opts->name,
+        "Specifies the dataset to operate on (See 'ldLookup create')"
+    )->required();
+
+    similar_by_snp->add_option(
+        "path_to_markers,-p,--path-to-markers",
+        opts->path_to_markers,
+        "File containing newline-separated index SNP IDs"
+    );
+
+    similar_by_snp->add_option(
+        "markers,-m,--markers",
+        opts->cli_markers,
+        "Additional space-separated SNP IDs"
+    );
+
+    similar_by_snp->callback([opts]() {
+        BinsTable bt(opts->name + BINSTABLE_EXT);
+        SNPTable snpt(opts->name + SNPTABLE_EXT);
+
+        auto do_get_similar = [&bt, &snpt] (const std::string& snp) {
+            auto maf_and_surrogates = snpt.get(snp);
             auto values = bt.get(bt.bin(
                 maf_and_surrogates.first,
                 maf_and_surrogates.second
             ));
-            pretty_print_key_and_values(line, values);
-        }
-    }
+            print_key_and_values(snp, values);
+        };
 
-    for (auto key : keys) {
-        auto maf_and_surrogates = snpt.get(key);
-        auto values = bt.get(bt.bin(
-            maf_and_surrogates.first,
-            maf_and_surrogates.second
-        ));
-        pretty_print_key_and_values(key, values);
-    }
+        iterate_keys(
+            opts->path_to_markers,
+            opts->cli_markers,
+            do_get_similar
+        );
+    });
 }
 
+void subcommand_distribute(CLI::App& app) {
+    auto opts = std::make_shared<SubcommandOptsDistribute>();
+    auto distribute = app.add_subcommand(
+        "distribute",
+        "Generate distributions for hypothesis testing"
+    );
+
+    distribute->add_option(
+        "name,--name",
+        opts->name,
+        "Specifies the dataset to operate on (See 'ldLookup create')"
+    )->required();
+
+    distribute->add_option(
+        "path_to_markers,-p,--path-to-markers",
+        opts->path_to_markers,
+        "File containing newline-separated index SNP IDs"
+    );
+
+    distribute->add_option(
+        "markers,-m,--markers",
+        opts->cli_markers,
+        "Additional space-separated SNP IDs"
+    );
+
+    distribute->add_option(
+        "districbutions,-d,--distributions",
+        opts->n_distributions,
+        "Number of distributions to generate"
+    );
+
+    distribute->callback([opts]() {
+        BinsTable bt(opts->name + BINSTABLE_EXT);
+        SNPTable snpt(opts->name + SNPTABLE_EXT);
+        std::map<size_t, std::vector<std::string>> dists;
+
+        for (size_t i = 0; i < opts->n_distributions; i++) {
+            dists.emplace(i, std::vector<std::string>());
+        }
+
+        auto do_distribute = [&] (const std::string& snp) {
+            auto maf_and_surrogates = snpt.get(snp);
+            auto values = bt.get_random(
+                bt.bin(
+                    maf_and_surrogates.first,
+                    maf_and_surrogates.second
+                ),
+                opts->n_distributions
+            );
+
+            for (size_t i = 0; i < values.size(); i++) {
+                dists[i].push_back(values.at(i));
+            }
+        };
+
+        iterate_keys(
+            opts->path_to_markers,
+            opts->cli_markers,
+            do_distribute
+        );
+
+        for (auto const& number_and_dist : dists) {
+            print_key_and_values(
+                "Distribution #" + std::to_string(number_and_dist.first+1),
+                number_and_dist.second
+            );
+        }
+    });
+}
 
 int main(int argc, char** argv) {
     std::string description;
@@ -258,119 +525,15 @@ int main(int argc, char** argv) {
     app.option_defaults()->always_capture_default();
     app.require_subcommand(1);
 
-    std::string name;
-    description = "Specifies the dataset to operate on (See 'ldLookup create')";
-    app.add_option("name,-n,--name", name, description)->required();
-
-    // 'create' Subcommand
-    auto create = app.add_subcommand("create", "Create a new dataset from LD data");
-
-    std::string create_path;
-    description = "File containing LD data";
-    create->add_option("path,-p,--path", create_path, description)->required();
-
-    float threshold_ld_score{ 0 };
-    description = "LD score (as measured by R^2) below which a genetic marker will be ignored";
-    create->add_option("-t,--threshold", threshold_ld_score, description);
-
-    size_t index_snp_id_col{ 2 };
-    description = "Zero-based index to column of data containing index SNP IDs";
-    create->add_option("-I,--index-snp-id-column", index_snp_id_col, description);
-
-    size_t maf_col{ 3 };
-    description = "Zero-based index to column of data containing MAFs for index SNPs";
-    create->add_option("-M,--maf-col", maf_col, description);
-
-    size_t ld_snp_id_col{ 6 };
-    description = "Zero-based index to column of data containing IDs for SNPs in LD with the index SNP";
-    create->add_option("-L,--ld-snp-id-column", ld_snp_id_col, description);
-
-    size_t ld_score_col{ 8 };
-    description = "Zero-based index to column of data containing r-squared values";
-    create->add_option("-R,--r2-index", ld_score_col, description);
-
-    char delimiter{ ' ' };
-    description = "Character used to separate columns of data";
-    create->add_option("-d,--delimiter", delimiter, description);
-
-    size_t max_key_size{ 200 };
-    description = "Maximum index SNP ID length in bytes";
-    create->add_option("-k,--key-size-limit", max_key_size, description);
-
-    size_t n_ld_bins{ 15 };
-    description = "Approximate number of groupings for index SNPs by number of LD surrogates";
-    create->add_option("-l,--ld-bin-count", n_ld_bins, description);
-
-    size_t n_maf_bins{ 15 };
-    description = "Approximate number of groupings for index SNPs by MAF ";
-    create->add_option("-m,--maf-bin-count", n_maf_bins, description);
-
-    // 'Retrieve' Subcommand
-    description = "Retrieve SNPs in LD with a particular index SNP";
-    auto retrieve = app.add_subcommand("retrieve", description);
-
-    std::string retrieve_path;
-    description = "File containing newline-separated index SNP IDs to retrieve";
-    retrieve->add_option("path,-p,--path", retrieve_path, description);
-
-    std::vector<std::string> retrieve_keys;
-    description = "Additional space-separated SNP IDs to retrieve";
-    retrieve->add_option("keys,-k,--keys", retrieve_keys, description);
-
-    // 'Bin' Subcommand
-    description = "Retrieve markers with similar MAF and number of LD surrogates";
-    auto bin = app.add_subcommand("bin", description);
-    bin->option_defaults()->always_capture_default(false);
-
-    double maf;
-    bin->add_option("maf,-m,--maf", maf, description)->required();
-
-    size_t surrogate_count;
-    bin->add_option("surrogates,-s,--surrogates", surrogate_count, description)->required();
-
-    // 'Bin_SNP' Subcommand
-    description = "Retrieve markers with similar MAF and number of LD surrogates to an index marker";
-    auto bin_snp = app.add_subcommand("bin_snp", description);
-    bin_snp->option_defaults()->always_capture_default(false);
-
-    std::string bin_snp_path;
-    description = "File containing newline-separated index SNP IDs to bin";
-    bin_snp->add_option("path,-p,--path", bin_snp_path, description);
-
-    std::vector<std::string> bin_snp_keys;
-    description = "Additional space-separated SNP IDs to bin";
-    bin_snp->add_option("keys,-k,--keys", bin_snp_keys, description);
-
-    CLI11_PARSE(app, argc, argv);
+    subcommand_create(app);
+    subcommand_get_ld(app);
+    subcommand_get_similar_by_value(app);
+    subcommand_get_similar_by_snp(app);
+    subcommand_distribute(app);
 
     // Application Logic
     try {
-        if (*create) {
-            GeneticDataValidator validator(
-                delimiter,
-                index_snp_id_col,
-                ld_snp_id_col,
-                ld_score_col,
-                maf_col,
-                threshold_ld_score,
-                max_key_size
-            );
-            create_tables(create_path, name, validator, n_ld_bins, n_maf_bins);
-        } else {
-            LDTable ldt(name + LDTABLE_EXT);
-            BinsTable bt(name + BINSTABLE_EXT);
-            SNPTable snpt(name + SNPTABLE_EXT);
-
-            if (*retrieve) {
-                do_retrieval(ldt, retrieve_path, retrieve_keys);
-            } else if (*bin) {
-                do_bin(bt, maf, surrogate_count);
-            } else if (*bin_snp) {
-                do_bin_snp(bt, snpt, bin_snp_path, bin_snp_keys);
-            } else {
-                throw std::runtime_error("Unknown subcommand passed to the CLI");
-            }
-        }
+        CLI11_PARSE(app, argc, argv);
     } catch (std::exception &e) {
         std::cout << "ERROR: " << e.what() << "\n";
         return 1;

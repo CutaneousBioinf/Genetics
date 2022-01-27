@@ -59,11 +59,7 @@ class GeneticDataValidator {
                         ld_score_col(ld_score_col),
                         maf_col(maf_col),
                         threshold_ld_score(threshold_ld_score),
-                        index_snp_id_max_length(index_snp_id_max_length),
-                        last_important_column(std::max({ index_snp_id_col,
-                                                         ld_snp_id_col,
-                                                         ld_score_col,
-                                                         maf_col }))
+                        index_snp_id_max_length(index_snp_id_max_length)
                         {}
 
         /** 
@@ -75,6 +71,10 @@ class GeneticDataValidator {
          * junk.
          **/
 		bool validate(const std::string& line) {
+            size_t last_important_column = std::max({
+                index_snp_id_col, ld_snp_id_col, ld_score_col, maf_col 
+            });
+
             size_t end = 0;
             size_t start = line.find_first_not_of(delimiter, end);
             size_t col = 0;
@@ -117,9 +117,6 @@ class GeneticDataValidator {
             // The line must contain columns for every data field.
             return col > last_important_column;
         }
-
-	private:
-		size_t last_important_column;
 };
 
 /**
