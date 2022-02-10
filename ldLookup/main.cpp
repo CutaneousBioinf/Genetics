@@ -53,8 +53,8 @@ void iterate_genetic_data(
 
     std::string line;
     size_t ld_pairs(0);
-    LDPair last;
-    LDPair curr;
+    LDPair last_new_snp{ "", "", 0, 0 };
+    LDPair curr{ "", "", 0 ,0 };
 
     while (getline(data, line)) {
         if (!parse_ld_pair(line, curr, reqs)) {
@@ -64,15 +64,15 @@ void iterate_genetic_data(
             continue;
         }
 
-        if (last.index_snp.compare(curr.ld_snp)) {
+        if (last_new_snp.index_snp.compare(curr.index_snp)) {
             if (ld_pairs) {
                 on_new_snp(
-                    last.index_snp,
-                    last.index_maf,
+                    last_new_snp.index_snp,
+                    last_new_snp.index_maf,
                     ld_pairs
                 );
             }
-            last = curr;
+            last_new_snp = curr;
             ld_pairs = 0;
         }
 
@@ -82,8 +82,8 @@ void iterate_genetic_data(
 
     if (ld_pairs) {
         on_new_snp(
-            last.index_snp,
-            last.index_maf,
+            last_new_snp.index_snp,
+            last_new_snp.index_maf,
             ld_pairs
         );
     }
@@ -385,6 +385,12 @@ void subcommand_get_similar_by_value(CLI::App& app) {
         "similar_by_value",
         "Retrieve markers with MAF and number of LD surrogates near target values"
     ));
+
+    similar_by_value->add_option(
+        "name,--name",
+        opts->name,
+        "Specifies the dataset to operate on (See 'ldLookup create')"
+    )->required();
 
     similar_by_value->add_option(
         "target_maf,-m,--target-maf",
