@@ -1,3 +1,4 @@
+#include <filesystem> // std::create_directory
 #include <iterator> // std::fill_n
 #include <random> // std::mt19337, std::uniform_int_distribution, std::random_device
 #include <string_view> // std::string_view
@@ -5,77 +6,77 @@
 #include "split.hpp"
 #include "vdh.hpp"
 
-VectorDiskHash::VectorDiskHash(const std::string& name)
-: name(name) {
-    // Open the data file.
-    auto data_path(name + DATA_EXTENSION);
-    auto mode(std::ios_base::binary | std::ios_base::in);
-    file.open(data_path, mode);
+VectorDiskHash::VectorDiskHash(const std::string& name, const std::string& dir)
+: name(name), read_only(true) {
+    // The VDH consists of two files: a DiskHash file and a .dat file.
+    // Open the .dat file.
+    std::filesystem::path data_path(dir);
+    data_path.append(name + DATA_EXTENSION);
+    file.open(data_path, std::ios_base::binary | std::ios_base::in);
     if (!file) {
-        throw std::runtime_error(
-            "VectorDiskHash '" + name +
-            "': Failed to Open '" + data_path + "'"
-        );
+        throw InternalError(name, "Failed to Open " + data_path.string());
     }
     
     // Read max_key_size from the data file.
     this->max_key_size = read_max_key_size();
 
     // Open the hashtable.
-    auto dht_path(name + DHT_EXTENSION);
+    std::filesystem::path dht_path(dir);
+    dht_path.append(name + DHT_EXTENSION);
     try {
         hashtable.reset(new dht::DiskHash<Location>(
             dht_path.c_str(), max_key_size, dht::DHOpenRO
         ));
     } catch (std::exception &e) {
-        throw std::runtime_error(
-            "VectorDiskHash '" + name +
-            "': Failed to Open '" + dht_path + "'"
-        );
+        throw InternalError(name, "Failed to Open " + dht_path.string() + " - " + e.what());
     }
 }
 
 VectorDiskHash::VectorDiskHash(
-    const std::string& name, const size_t max_key_size
-) : name(name), max_key_size(max_key_size) {
+    const std::string& name,
+    const size_t max_key_size,
+    const std::string& dir
+) : name(name), read_only(false), max_key_size(max_key_size) {
+    if (dir.size()) {
+        std::filesystem::create_directory(dir);
+    }
+
     // Open the data file.
-    auto data_path = name + DATA_EXTENSION;
+    std::filesystem::path data_path(dir);
+    data_path.append(name + DATA_EXTENSION);
     auto mode = std::ios_base::binary
               | std::ios_base::trunc 
               | std::ios_base::in 
               | std::ios_base::out;
     file.open(data_path, mode);
+    
     if (!file) {
-        throw std::runtime_error(
-            "VectorDiskHash '" + name +
-            "': Failed to Open '" + data_path + "'"
-        );
+        throw InternalError(name, "Failed to Open " + data_path.string());
     }
 
     // Save max_key_size to the data file.
     write_max_key_size(max_key_size);
 
     // Open the hashtable.
-    auto dht_path = name + DHT_EXTENSION;
+    std::filesystem::path dht_path(dir);
+    dht_path.append(name + DHT_EXTENSION);
     try {
         hashtable.reset(new dht::DiskHash<Location>(
             dht_path.c_str(), max_key_size, dht::DHOpenRW
         ));
     } catch (std::exception &e) {
-        throw std::runtime_error(
-            "VectorDiskHash '" + name +
-            "': Failed to Open '" + dht_path + "'"
-        );
+        throw InternalError(name, "Failed to Open " + dht_path.string() + " - " + e.what());
     }
 }
 
 void VectorDiskHash::reserve(const std::string& key, const size_t space) {
     // Prevent reserve() calls on existing keys.
-    if (hashtable->lookup(key.c_str()) != NULL) {
-        throw std::runtime_error(
-            "VectorDiskHash '" + name 
-            + "': Cannot reserve() Existing Key '" + key + "'"
-        );
+    if (read_only) {
+        throw ModeError(name, "reserve() called on read-only VectorDiskHash");
+    } else if (hashtable->lookup(key.c_str()) != NULL) {
+        throw KeyError(name, "Key '" + key + "' was already insert()ed or reserve()d");
+    } else if (key.size() > max_key_size) {
+        throw KeyError(name, "Key '" + key + "' exceeds maximum key size");
     }
 
     // Reserve space at the end of the file for the new key's values.
@@ -85,13 +86,23 @@ void VectorDiskHash::reserve(const std::string& key, const size_t space) {
     // We need to store the location of the reserved space in the hashtable.
     // Since loc.start must be the start of the reserved space, we construct
     // loc before writing characters to represent the unused reserved space.
-    Location loc{ file.tellp(), file.tellp(), space} ;
+    Location loc{ file.tellp(), file.tellp(), space};
     hashtable->insert(key.c_str(), loc);
     // Write KEY_DELIMITER characters representing the unused reserved space.
     std::fill_n(std::ostream_iterator<char>(file), space, KEY_DELIMITER);
+
+    if (!file) {
+        throw InternalError(name, "Bad write during reserve()");
+    }
 }
 
 void VectorDiskHash::insert(const std::string& key, const std::string& value) {
+    if (read_only) {
+        throw ModeError(name, "insert() called on read-only VectorDiskHash");
+    } else if (key.size() > max_key_size) {
+        throw KeyError(name, "Key '" + key + "' exceeds maximum key size");
+    }
+
     const char* value_str(value.c_str());
     const size_t value_size(value.size());
 
@@ -102,7 +113,8 @@ void VectorDiskHash::insert(const std::string& key, const std::string& value) {
 
         if (loc == NULL) {
             // Key is completely new.
-            // First, mark the end of the end_of_file_key with a KEY_DELIMITER.
+            // First, mark the end of the end_of_file_key's values with a
+            // KEY_DELIMITER.
             file.seekp(0, std::ios_base::end);
             file.put(KEY_DELIMITER);
             // Store the location of the new key's values in the hashtable.
@@ -120,10 +132,7 @@ void VectorDiskHash::insert(const std::string& key, const std::string& value) {
             // new value.
             const size_t write_size(value_size + sizeof(VALUE_DELIMITER));
             if (write_size > loc->reserve_remaining) {
-                throw std::runtime_error(
-                    "VectorDiskHash '" + name +
-                    "': Out of reserve()d Space for Key '" + key + "'"
-                );
+                throw KeyError(name, "Out of reserve()d space for key '" + key + "'");
             }
             // Insert the new value.
             file.seekp(loc->write_location);
@@ -142,9 +151,7 @@ void VectorDiskHash::insert(const std::string& key, const std::string& value) {
     }
 
     if (!file) {
-        throw std::runtime_error(
-            "VectorDiskHash '" + name + "': Write Failed"
-        );
+        throw InternalError(name, "Bad write during insert()");
     }
 }
 
@@ -152,9 +159,7 @@ std::vector<std::string> VectorDiskHash::get(const std::string& key) {
     const Location* loc(hashtable->lookup(key.c_str()));
     // lookup returns NULL if the key doesn't exist.
     if (loc == NULL) {
-        throw std::runtime_error(
-            "VectorDiskHash '" + name + "': Nonexistent Key '" + key + "'"
-        );
+        throw KeyError(name, "Key '" + key + "' does not exist");
     }
     // key exists, so read its values from the file.
     file.seekg(loc->start);
@@ -170,9 +175,7 @@ std::vector<std::string> VectorDiskHash::get_random(
     const Location* loc(hashtable->lookup(key.c_str()));
     // lookup returns NULL if the key doesn't exist.
     if (loc == NULL) {
-        throw std::runtime_error(
-            "VectorDiskHash '" + name + "': Nonexistent Key '" + key + "'"
-        );
+        throw KeyError(name, "Key '" + key + "' does not exist");
     }
     // key exists, so read its values from the file.
     file.seekg(loc->start);
@@ -196,9 +199,7 @@ size_t VectorDiskHash::read_max_key_size() {
     try {
         return std::stoi(line);
     } catch (std::invalid_argument& e) {
-        throw std::runtime_error(
-            "VectorDiskHash '" + name + "': Invalid Max Key Size"
-        );
+        throw InternalError(name, "Malformed Table (Invalid Max Key Size)");
     }
 }
 
@@ -210,9 +211,7 @@ void VectorDiskHash::write_max_key_size(const size_t max_key_size) {
 
 void VectorDiskHash::read_until_key_delimiter(std::string& buff) {
     if (!getline(file, buff, KEY_DELIMITER)) {
-        throw std::runtime_error(
-            "VectorDiskHash '" + name + "': Read Failed"
-        );
+        throw InternalError(name, "Bad read");
     }
 }
 

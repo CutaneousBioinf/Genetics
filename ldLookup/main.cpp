@@ -7,24 +7,14 @@
 /***             Utility Functions             ***/
 /*************************************************/
 
-void print_vector(const std::vector<std::string>& values) {
-    std::string sep("\t");
-    for (auto v : values) {
-        std::cout << sep << v;
-        sep = "\n\t";
-    }
-
-    std::cout << "\n";
-}
-
 template <typename Key>
 void print_key_and_values(
     const Key key,
     const std::vector<std::string>& values
 ) {
-    std::cout << key << "\n";
-    print_vector(values);
-    std::cout << "\n";
+    for (const auto& val : values) {
+        std:: cout << key << '\t' << val << '\n';
+    }
 }
 
 /**
@@ -90,12 +80,12 @@ void iterate_genetic_data(
 }
 
 /**
- * Creates all of ldLookup's data tables.
+ * Creates all of ldLookup's data tables. Requires that the tables
+ * do not already exist.
  * 
  * Parameters:
  *  source_path - File containing linkage disequilibrium data.
- *  name - A string used to identify and reopen tables created by
- *      this call.
+ *  dir - Path to directory in which to create tables
  *  reqs - Requirements for parsing and validating LD data.
  *  n_ld_bins - Approximate number of BinsTable divisions by number
  *      of LD surrogates.
@@ -103,15 +93,15 @@ void iterate_genetic_data(
 **/  
 void create_tables(
     const std::string& source_path,
-    const std::string& table,
+    const std::string& dir,
     LDPairRequirements reqs,
     size_t n_ld_bins,
     size_t n_maf_bins
 ) {
     // First Pass: Populate LDTable and SNPTable.
     // Also, gather distribution data for MAF/LD.
-    LDTable ldt(table, reqs.max_index_snp_size);
-    SNPTable snpt(table, reqs.max_index_snp_size);
+    LDTable ldt(reqs.max_index_snp_size, dir);
+    SNPTable snpt(reqs.max_index_snp_size, dir);
 
     std::map<size_t, size_t> ld_counts_hist;
     std::map<double, size_t> maf_counts_hist;
@@ -146,7 +136,7 @@ void create_tables(
     ));
 
     // Initialize BinsTable.
-    BinsTable bt(table, ld_quantiles, maf_quantiles);
+    BinsTable bt(ld_quantiles, maf_quantiles, dir);
 
     // Second Pass: Determine exact bin sizes.
     std::map<std::string, size_t> bin_sizes;
@@ -226,33 +216,33 @@ void iterate_lines(
 /************************************************/
 
 struct SubcommandOptsCreate {
-    std::string name;
+    std::string dir;
     std::string data_path;
-    LDPairRequirements reqs{ ' ', 3, 7, 9, 4, 200, 0.0 };
+    LDPairRequirements reqs{ ' ', 3, 7, 4, 9, 200, 0.0 };
     size_t n_ld_bins = 15;
     size_t n_maf_bins = 15;
 };
 
 struct SubcommandOptsGetLD {
-    std::string name;
+    std::string dir;
     std::string path_to_markers = "";
     std::vector<std::string> cli_markers = std::vector<std::string>();
 };
 
 struct SubcommandOptsGetSimilarByValue {
-    std::string name;
+    std::string dir;
     double target_maf;
     size_t target_surrogate_count;
 };
 
 struct SubcommandOptsGetSimilarBySNP {
-    std::string name;
+    std::string dir;
     std::string path_to_markers = "";
     std::vector<std::string> cli_markers = std::vector<std::string>();
 };
 
 struct SubcommandOptsDistribute {
-    std::string name;
+    std::string dir;
     std::string path_to_markers = "";
     std::vector<std::string> cli_markers = std::vector<std::string>();
     size_t n_distributions = 1;
@@ -263,13 +253,13 @@ void subcommand_create(CLI::App& app) {
     auto create(app.add_subcommand("create", "Create a new dataset from LD data"));
 
     create->add_option(
-        "name,--name",
-        opts->name,
-        "Specifies a name for the created dataset"
+        "dir,--dir",
+        opts->dir,
+        "Specifies a directory that will contain the created dataset"
     )->required();
 
     create->add_option(
-        "path,-p,--path",
+        "path_to_data,-p,--path-to-data",
         opts->data_path, 
     "File containing LD data"
     )->required();
@@ -329,7 +319,7 @@ void subcommand_create(CLI::App& app) {
     );
 
     create->callback([opts]() {
-        // These parameters are passed/default to one-indexed columns.
+        // These parameters are passed as/default to one-indexed columns.
         // They need to be zero-indexed.
         opts->reqs.index_snp_column--;
         opts->reqs.ld_snp_column--;
@@ -337,7 +327,7 @@ void subcommand_create(CLI::App& app) {
         opts->reqs.r_squared_column--;
         create_tables(
             opts->data_path,
-            opts->name,
+            opts->dir,
             opts->reqs,
             opts->n_ld_bins,
             opts->n_maf_bins
@@ -352,9 +342,9 @@ void subcommand_get_ld(CLI::App& app) {
     ));
 
     get_ld->add_option(
-        "name,--name",
-        opts->name,
-        "Specifies the dataset to operate on (See 'ldLookup create')"
+        "dir,--dir",
+        opts->dir,
+        "Specifies the location of the dataset to operate on (see 'ldLookup create')"
     )->required();
 
     get_ld->add_option(
@@ -370,7 +360,7 @@ void subcommand_get_ld(CLI::App& app) {
     );
 
     get_ld->callback([opts]() {
-        LDTable ldt(opts->name);
+        LDTable ldt(opts->dir);
         auto do_get_ld([&ldt] (const std::string& snp) {
             std::vector<std::string> values = ldt.get(snp);
             print_key_and_values(snp, values);
@@ -387,9 +377,9 @@ void subcommand_get_similar_by_value(CLI::App& app) {
     ));
 
     similar_by_value->add_option(
-        "name,--name",
-        opts->name,
-        "Specifies the dataset to operate on (See 'ldLookup create')"
+        "dir,--dir",
+        opts->dir,
+        "Specifies the location of the dataset to operate on (see 'ldLookup create')"
     )->required();
 
     similar_by_value->add_option(
@@ -405,8 +395,8 @@ void subcommand_get_similar_by_value(CLI::App& app) {
     )->required();
 
     similar_by_value->callback([opts]() {
-        BinsTable bt(opts->name);
-        SNPTable snpt(opts->name);
+        BinsTable bt(opts->dir);
+        SNPTable snpt(opts->dir);
         auto values(bt.get(
             bt.bin(opts->target_surrogate_count, opts->target_maf)
         ));
@@ -426,9 +416,9 @@ void subcommand_get_similar_by_snp(CLI::App& app) {
     ));
 
     similar_by_snp->add_option(
-        "name,--name",
-        opts->name,
-        "Specifies the dataset to operate on (See 'ldLookup create')"
+        "dir,--dir",
+        opts->dir,
+        "Specifies the location of the dataset to operate on (see 'ldLookup create')"
     )->required();
 
     similar_by_snp->add_option(
@@ -444,8 +434,8 @@ void subcommand_get_similar_by_snp(CLI::App& app) {
     );
 
     similar_by_snp->callback([opts]() {
-        BinsTable bt(opts->name);
-        SNPTable snpt(opts->name);
+        BinsTable bt(opts->dir);
+        SNPTable snpt(opts->dir);
 
         auto do_get_similar([&bt, &snpt] (const std::string& snp) {
             auto maf_and_surrogates(snpt.get(snp));
@@ -472,9 +462,9 @@ void subcommand_distribute(CLI::App& app) {
     ));
 
     distribute->add_option(
-        "name,--name",
-        opts->name,
-        "Specifies the dataset to operate on (See 'ldLookup create')"
+        "dir,--dir",
+        opts->dir,
+        "Specifies the location of the dataset to operate on (see 'ldLookup create')"
     )->required();
 
     distribute->add_option(
@@ -496,8 +486,8 @@ void subcommand_distribute(CLI::App& app) {
     );
 
     distribute->callback([opts]() {
-        BinsTable bt(opts->name);
-        SNPTable snpt(opts->name);
+        BinsTable bt(opts->dir);
+        SNPTable snpt(opts->dir);
         std::map<size_t, std::vector<std::string>> dists;
 
         for (size_t i = 0; i < opts->n_distributions; i++) {

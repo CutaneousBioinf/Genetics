@@ -38,22 +38,22 @@ class BinsTable {
          * Opens an existing BinsTable.
          * 
          * Parameters:
-         *  name - Name of table to open
+         *  dir - Path to directory containing a BinsTable.
         **/
-        BinsTable(const std::string& name);
+        BinsTable(const std::string& dir="");
 
         /**
          * Creates a new BinsTable.
          * 
          * Parameters:
-         *  name - Name of table to create
          *  surrogate_quantiles - Lower bounds for LD surrogate bins
          *  maf_quantiles - Lower bounds for MAF bins
+         *  dir - Path to directory containing a BinsTable.
         **/
         BinsTable(
-            const std::string& name,
             const std::vector<size_t>& surrogate_quantiles,
-            const std::vector<double>& maf_quantiles
+            const std::vector<double>& maf_quantiles,
+            const std::string& dir=""
         );
 
         /**
@@ -116,7 +116,7 @@ class BinsTable {
         inline static const std::string LD_BINS_KEY = "__RESERVED_KEY_LD_BINS__";
         inline static const std::string MAF_BINS_KEY = "__RESERVED_KEY_MAF_BINS__";
 
-        inline static const std::string BINSTABLE_EXT = "_bt";
+        inline static const std::string NAME = "bins_table";
 
         std::shared_ptr<VectorDiskHash> table;
         std::vector<size_t> surrogate_quantiles;
@@ -130,18 +130,18 @@ class SNPTable {
          * Opens an existing SNPTable.
          * 
          * Parameters:
-         *  name - Name of table to open
+         *  dir - Path to directory containing an SNPTable.
         **/
-        SNPTable(const std::string& name);
+        SNPTable(const std::string& dir="");
 
         /**
          * Creates a new SNPTable.
          * 
          * Parameters:
-         *  name - Name of table to create
          *  max_key_size - Maximum length of an SNP key
+         *  dir - Path to directory in which to create an SNPTable.
         **/
-        SNPTable(const std::string& name, const size_t max_key_size);
+        SNPTable(const size_t max_key_size, const std::string& dir="");
 
         /* Associates an SNP with an MAF and number of LD surrogates. */
         void insert(
@@ -155,7 +155,7 @@ class SNPTable {
 
     private:
         std::shared_ptr<VectorDiskHash> table;
-        inline static const std::string SNPTABLE_EXT = "_snpt";
+        inline static const std::string NAME = "snp_table";
 };
 
 /* Allows lookup of markers in LD with a particular SNP */
@@ -165,18 +165,18 @@ class LDTable {
          * Opens an existing LDTable.
          * 
          * Parameters:
-         *  name - Name of table to open
+         *  dir - Path to directory containing an LDTable.
         **/
-        LDTable(const std::string& name);
+        LDTable(const std::string& dir="");
 
         /**
          * Creates a new LDTable.
          * 
          * Parameters:
-         *  name - Name of table to create
          *  max_key_size - Maximum length of an SNP key
+         *  dir - Path to directory in which to create an LDTable.
         **/
-        LDTable(const std::string& name, const size_t max_key_size);
+        LDTable(const size_t max_key_size, const std::string& dir="");
 
         /**
          * Associate an SNP with a genetic marker.
@@ -202,7 +202,7 @@ class LDTable {
 
     private:
         std::shared_ptr<VectorDiskHash> table;
-        inline static const std::string LDTABLE_EXT = "_ldt";
+        inline static const std::string NAME = "ld_table";
 };
 
 #endif

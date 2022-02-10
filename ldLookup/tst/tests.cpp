@@ -75,7 +75,7 @@ void test_get_last_lte() {
 int main(int argc, char** argv) {
     std::map<int, size_t> histogram;
 
-    std::fstream fin("hist_test_data");
+    std::fstream fin("tst/hist_test_data");
     if (!fin) {
         std::cout << "Failed to open hist_test_data";
         return 1;

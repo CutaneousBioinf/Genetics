@@ -21,9 +21,9 @@ double deserialize_maf(const std::string& maf) {
     return std::stod(maf);
 }
 
-BinsTable::BinsTable(const std::string& name) {
+BinsTable::BinsTable(const std::string& dir) {
     // Open the table.
-    table.reset(new VectorDiskHash(name + BINSTABLE_EXT));
+    table.reset(new VectorDiskHash(NAME, dir));
 
     try {
         // Load LD pairs bins from the table.
@@ -51,12 +51,12 @@ BinsTable::BinsTable(const std::string& name) {
 }
 
 BinsTable::BinsTable(
-    const std::string& name,
     const std::vector<size_t>& surrogate_quantiles,
-    const std::vector<double>& maf_quantiles
+    const std::vector<double>& maf_quantiles,
+    const std::string& dir
 ) {
     // Prepare the table.
-    table.reset(new VectorDiskHash(name + BINSTABLE_EXT, MAX_KEY_SIZE));
+    table.reset(new VectorDiskHash(NAME, MAX_KEY_SIZE, dir));
 
     this->surrogate_quantiles = surrogate_quantiles;
     this->maf_quantiles = maf_quantiles;
@@ -125,12 +125,12 @@ std::string BinsTable::bin(
     return key;
 }
 
-SNPTable::SNPTable(const std::string& name) {
-    table.reset(new VectorDiskHash(name + SNPTABLE_EXT));
+SNPTable::SNPTable(const std::string& dir) {
+    table.reset(new VectorDiskHash(NAME, dir));
 }
 
-SNPTable::SNPTable(const std::string& name, const size_t max_key_size) {
-    table.reset(new VectorDiskHash(name + SNPTABLE_EXT, max_key_size));
+SNPTable::SNPTable(const size_t max_key_size, const std::string& dir) {
+    table.reset(new VectorDiskHash(NAME, max_key_size, dir));
 }
 
 void SNPTable::insert(
@@ -161,12 +161,12 @@ std::pair<size_t, double> SNPTable::get(const std::string& snp) {
     }
 }
 
-LDTable::LDTable(const std::string& name) {
-    table.reset(new VectorDiskHash(name + LDTABLE_EXT));
+LDTable::LDTable(const std::string& dir) {
+    table.reset(new VectorDiskHash(NAME, dir));
 }
 
-LDTable::LDTable(const std::string& name, const size_t max_key_size) {
-    table.reset(new VectorDiskHash(name + LDTABLE_EXT, max_key_size));
+LDTable::LDTable(const size_t max_key_size, const std::string& dir) {
+    table.reset(new VectorDiskHash(NAME, max_key_size, dir));
 }
 
 void LDTable::insert(const std::string& snp, const std::string& ld_snp) {
