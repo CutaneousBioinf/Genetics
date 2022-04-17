@@ -33,8 +33,11 @@ ldLookup provides six subcommands. The three in **bold** are most useful:
 |    ``get_variant_statistics``    | Get MAF and number of LD surrogates of specified key variants                                            |
 
 A typical workflow looks like this:
-![Image of ldLookup Workflow](./data/ldLookup_workflow.png)
 
+<p align="center">
+  <img src="./data/ldLookup_workflow.png" width="400">
+</p>
+  
 ### setup
 ``setup`` uses a file of linkage disequilibrium data to build a lookup table in ldLookup's internal format. A table must be built for each dataset you wish to analyze. ldLookup's other subcommands then query the table to perform their analysis.
 
