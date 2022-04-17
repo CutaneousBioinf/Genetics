@@ -1,178 +1,111 @@
-#include <algorithm>  // std::random_shuffle
-#include <stdexcept>  // std::invalid_argument, std::out_of_range, std::runtime_error
-
-#include "split.hpp"
 #include "tables.hpp"
-#include "histogram.hpp"
 
-std::string serialize_surrogates(size_t surrogate_count) {
-    return std::to_string(surrogate_count);
+using std::string;
+using std::vector;
+
+LDTable::LDTable(const Options& opts)
+: VectorDiskHash(opts) {}
+
+StrataTable::StrataTable(
+    const string& file_path,
+    const string& table_path,
+    Histogram<size_t> n_surrogates_strata_in,
+    Histogram<double> maf_strata_in)
+    : n_surrogates_strata(n_surrogates_strata_in),
+      maf_strata(maf_strata_in) {
+	table.reset(new VectorDiskHash({
+        file_path, table_path, MAX_KEY_SIZE, true
+    }));
+
+    n_surrogates_strata.increase_count(0, 0);
+    for (size_t n_surrogates : n_surrogates_strata.strata()) {
+        table->append(N_SURROGATES_KEY, std::to_string(n_surrogates));
+    }
+
+    maf_strata.increase_count(0.0, 0);
+    for (double maf : maf_strata.strata()) {
+        table->append(MAF_KEY, std::to_string(maf));
+    }
 }
 
-std::string serialize_maf(double maf) {
-    return std::to_string(maf);
-}
-
-size_t deserialize_surrogates(const std::string& surrogate_count) {
-    return std::stoul(surrogate_count);
-}
-
-double deserialize_maf(const std::string& maf) {
-    return std::stod(maf);
-}
-
-BinsTable::BinsTable(const std::string& dir) {
-    // Open the table.
-    table.reset(new VectorDiskHash(NAME, dir));
+StrataTable::StrataTable(
+    const string& file_path,
+    const string& table_path) {
+	table.reset(new VectorDiskHash({
+        file_path, table_path, MAX_KEY_SIZE, false
+    }));
 
     try {
-        // Load LD pairs bins from the table.
-        for (auto surrogates : table->get(LD_BINS_KEY)) {
-            if (surrogates.find("LOW") == std::string::npos) {
-                surrogate_quantiles.emplace_back(
-                    deserialize_surrogates(surrogates)
-                );
-            }
+        for (string n_surrogates_str : table->lookup(N_SURROGATES_KEY)) {
+            auto n_surrogates = static_cast<size_t>(std::stoull(n_surrogates_str));
+            n_surrogates_strata.increase_count(n_surrogates, 0);
         }
 
-        // Load MAF bins from the table.
-        for (auto maf : table->get(MAF_BINS_KEY)) {
-            if (maf.find("LOW") == std::string::npos) {
-                maf_quantiles.emplace_back(deserialize_maf(maf));
-            }
+        for (string maf_str : table->lookup(MAF_KEY)) {
+            auto maf = std::stod(maf_str);
+            maf_strata.increase_count(maf, 0);
         }
     } catch (std::invalid_argument& e) {
-        throw std::runtime_error("BinsTable Corrupted: Invalid bins");
+        throw std::runtime_error("StrataTable Constructor: Unreadable Strata");
     } catch (std::out_of_range& e) {
-        throw std::runtime_error("BinsTable Corrupted: Invalid bins");
-    } catch (std::runtime_error& e) {
-        throw std::runtime_error("BinsTable Corrupted: Invalid bins");
+        throw std::runtime_error("StrataTable Constructor: Unreadable Strata");
     }
 }
 
-BinsTable::BinsTable(
-    const std::vector<size_t>& surrogate_quantiles,
-    const std::vector<double>& maf_quantiles,
-    const std::string& dir
-) {
-    // Prepare the table.
-    table.reset(new VectorDiskHash(NAME, MAX_KEY_SIZE, dir));
+void StrataTable::append(const IndexVariantSummary& summary) {
+    table->append(get_stratum(summary), summary.variant_id);
+}
 
-    this->surrogate_quantiles = surrogate_quantiles;
-    this->maf_quantiles = maf_quantiles;
+vector<string> StrataTable::lookup(const IndexVariantSummary& summary) {
+    return table->lookup(get_stratum(summary));
+}
 
-    // Save LD pairs bins in the table.
-    for (auto surrogates : surrogate_quantiles) {
-        table->insert(LD_BINS_KEY, serialize_surrogates(surrogates));
+vector<string> StrataTable::lookup_sample(
+    const IndexVariantSummary& summary,
+    const size_t k) {
+    return table->lookup_sample(get_stratum(summary), k);
+}
+
+void StrataTable::reserve(
+    const Histogram<StrataTable::Stratum>& strata_sizes) {
+    for (auto &stratum : strata_sizes.strata()) {
+        size_t bytes_to_reserve = strata_sizes.get_count(stratum);
+        table->reserve(stratum, bytes_to_reserve);
     }
-
-    // Save MAF bins in the table.
-    for (auto maf : maf_quantiles) {
-        table->insert(MAF_BINS_KEY, serialize_maf(maf));
-    }
 }
 
-void BinsTable::reserve(
-    const std::string& bin,
-    size_t space
-) {
-    table->reserve(bin, space);
+StrataTable::Stratum
+StrataTable::get_stratum(const IndexVariantSummary& summary) {
+    size_t surr_stratum = n_surrogates_strata.get_stratum(summary.n_surrogates);
+    double maf_stratum = maf_strata.get_stratum(summary.maf);
+    return std::to_string(surr_stratum) + " " + std::to_string(maf_stratum);
 }
 
-void BinsTable::insert(
-    const std::string& bin,
-    const std::string& snp
-) {
-    table->insert(bin, snp);
+SummaryTable::SummaryTable(const Options& opts) {
+    table.reset(new VectorDiskHash(opts));
 }
 
-std::vector<std::string> BinsTable::get(const std::string& bin) {
-    if (bin.find("LOW") != std::string::npos) {
-        return std::vector<std::string>();
-    }
-    return table->get(bin);
+void SummaryTable::append(const IndexVariantSummary& summary) {
+    vector<string> values = {
+        std::to_string(summary.maf),
+        std::to_string(summary.n_surrogates)
+    };
+    table->append(summary.variant_id, values);
 }
 
-std::vector<std::string> BinsTable::get_random(
-    const std::string& bin,
-    size_t n_random
-) {
-    if (bin.find("LOW") != std::string::npos) {
-        return std::vector<std::string>();
-    }
-    return table->get_random(bin, n_random);
-}
-
-std::string BinsTable::bin(
-    size_t surrogate_count,
-    double maf
-) {
-    auto surrogate_bin(get_last_lte(surrogate_count, surrogate_quantiles));
-    if (surrogate_bin == surrogate_quantiles.end()) {
-        return "LOW";
-    }
-
-    auto maf_bin(get_last_lte(maf, maf_quantiles));
-    if (maf_bin == maf_quantiles.end()) {
-        return "LOW";
-    }
-
-    auto key(
-        serialize_surrogates(*surrogate_bin)
-        + FIELD_SEPARATOR
-        + serialize_maf(*maf_bin)
-    );
-    return key;
-}
-
-SNPTable::SNPTable(const std::string& dir) {
-    table.reset(new VectorDiskHash(NAME, dir));
-}
-
-SNPTable::SNPTable(const size_t max_key_size, const std::string& dir) {
-    table.reset(new VectorDiskHash(NAME, max_key_size, dir));
-}
-
-void SNPTable::insert(
-    const std::string& snp,
-    const size_t surrogate_count,
-    const double maf
-) {
-    auto val(
-        serialize_surrogates(surrogate_count)
-        + FIELD_SEPARATOR
-        + serialize_maf(maf)
-    );
-    table->insert(snp, val);
-}
-
-std::pair<size_t, double> SNPTable::get(const std::string& snp) {
+IndexVariantSummary SummaryTable::lookup(const string &index_variant_id) {
+    IndexVariantSummary ret{ index_variant_id, 0.0, 0 };
+    vector<string> lookup_values = table->lookup(index_variant_id);
     try {
-        auto val(split_to_strings(table->get(snp).at(0), FIELD_SEPARATOR));
-        auto surrogate_count(deserialize_surrogates(val.at(0)));
-        auto maf(deserialize_maf(val.at(1)));
-        return std::pair<size_t, double>(surrogate_count, maf);
+        ret.maf = std::stod(lookup_values.at(0));
+        auto n_surrogates = std::stoull(lookup_values.at(1));
+        ret.n_surrogates = static_cast<size_t>(n_surrogates);
+        return ret;
     } catch (std::invalid_argument& e) {
-        auto msg("SNPTable Corrupted: Malformed Key '" + snp + "'");
-        throw std::runtime_error(msg);
+        auto msg = "SummaryTable lookup(): Corrupted Value for Key ";
+        throw std::runtime_error(msg + index_variant_id);
     } catch (std::out_of_range& e) {
-        auto msg("SNPTable Corrupted: Malformed Key '" + snp + "'");
-        throw std::runtime_error(msg);
+        auto msg = "SummaryTable lookup(): Corrupted Value for Key ";
+        throw std::runtime_error(msg + index_variant_id);
     }
-}
-
-LDTable::LDTable(const std::string& dir) {
-    table.reset(new VectorDiskHash(NAME, dir));
-}
-
-LDTable::LDTable(const size_t max_key_size, const std::string& dir) {
-    table.reset(new VectorDiskHash(NAME, max_key_size, dir));
-}
-
-void LDTable::insert(const std::string& snp, const std::string& ld_snp) {
-    table->insert(snp, ld_snp);
-}
-
-std::vector<std::string> LDTable::get(const std::string& snp) {
-    return table->get(snp);
 }

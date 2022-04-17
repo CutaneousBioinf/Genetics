@@ -1,4 +1,6 @@
-*.o
-disktest
-libdht.so
-diskhashtools
+/.stack-work/
+*.so
+/build/
+/dist/
+/diskhash.egg-info/
+/.cache/

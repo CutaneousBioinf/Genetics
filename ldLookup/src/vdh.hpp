@@ -1,133 +1,165 @@
-#ifndef LDLOOKUP_VDH_HPP
-#define LDLOOKUP_VDH_HPP
+#ifndef _LDLOOKUP_VDH_HPP_
+#define _LDLOOKUP_VDH_HPP_
 
-#include <fstream>
-#include <memory> // std::shared_ptr
+#include <stddef.h>  // size_t
+
+#include <fstream>    // std::fstream, streampos, _Ios_openmode
+#include <memory>     // std::shared_ptr
+#include <stdexcept>  // std::runtime_error
 #include <string>
-#include <stdexcept> // std::runtime_error
 #include <vector>
 
-#include "diskhash/diskhash.hpp"
+#include "diskhash/src/diskhash.hpp"
 
-struct VectorDiskHashError : public std::runtime_error {
-    VectorDiskHashError(
-        const std::string& name,
-        const std::string& what = "No Details"
-    ) : std::runtime_error("VectorDiskHash Error in '" + name + "': " + what) {}
+/**
+ * VectorDiskHashes are made of two files, the paths to which must be
+ * specified to create or open the VectorDiskHash. file_path and
+ * table_path are NOT interchangeable.
+ * 
+ * If 'create' is true:
+ * - Both files will be created.
+ * - If either file already exists, vdh_mode_error will be thrown.
+ * If 'create' is false:
+ * - If either file does not exist, vdh_mode_error will be thrown.
+ */
+struct Options {
+	std::string file_path;
+	std::string table_path;
+    unsigned long max_key_size;
+	bool create;
 };
 
-struct InternalError : public VectorDiskHashError {
-    InternalError(
-        const std::string& name,
-        const std::string& what = "No Details"
-    ) : VectorDiskHashError(name, "Internal Error - " + what) {}
+/* Custom Exceptions for VectorDiskHash */
+struct vdh_error : std::runtime_error {
+	vdh_error(const Options &opts, const std::string &msg)
+	    : std::runtime_error(
+	          "VectorDiskHash Error\nFile Path: " +
+			  opts.file_path + 
+			  "\nTable Path: " + 
+			  opts.table_path + 
+			  "\nInfo: " +
+			  msg) {}
 };
 
-struct KeyError : public VectorDiskHashError {
-    KeyError(
-        const std::string& name,
-        const std::string& what = "No Details"
-    ) : VectorDiskHashError(name, "Key Error - " + what) {}
+struct vdh_internal_error : vdh_error {
+	vdh_internal_error(
+	    const Options &opts,
+	    const std::string &msg = "Internal Error")
+	    : vdh_error(opts, msg) {}
 };
 
-struct ModeError : public VectorDiskHashError {
-    ModeError(
-        const std::string& name,
-        const std::string& what = "No Details"
-    ) : VectorDiskHashError(name, "Mode Error - " + what) {}
+struct vdh_mode_error : vdh_error {
+	vdh_mode_error(
+	    const Options &opts,
+	    const std::string &msg = "Mode Error")
+	    : vdh_error(opts, msg) {}
 };
 
-/* Persistent, write-once map of strings to arrays of strings. */
+struct vdh_key_error : vdh_error {
+	vdh_key_error(
+	    const Options &opts,
+	    const std::string &msg = "Key Error")
+	    : vdh_error(opts, msg) {}
+};
+
+struct vdh_value_error : vdh_error {
+	vdh_value_error(
+	    const Options &opts,
+	    const std::string &msg = "Value Error")
+	    : vdh_error(opts, msg) {}
+};
+
+/* Persistent, write-once map from strings to string vectors. */
 class VectorDiskHash {
-    public:
-        /**
-         * EFFECTS: Opens an existing VectorDiskHash.
-         * THROWS: internal_error on failure.
-         */
-        VectorDiskHash(const std::string& name, const std::string& dir="");
+   public:
+	/**
+     * EFFECTS: Creates or opens a VectorDiskHash.
+     * THROWS: vdh_mode_error (see Options class).
+     *         exception on operation failure.
+     * NOTE: Also see documentation for the Options class.
+     */
+	VectorDiskHash(const Options &opts);
 
-        /**
-         * EFFECTS: Creates a new VectorDiskHash.
-         * THROWS: mode_error if the VectorDiskHash already exists.
-         *         internal_error on failure.
-         */
-        VectorDiskHash(
-            const std::string& name,
-            const size_t max_key_size,
-            const std::string& dir=""
-        );
+    /**
+     * EFFECTS: Associates 'key' with 'values'.
+     * THROWS: vdh_mode_error if VectorDiskHash is read-only.
+     *         vdh_value_error if 'values' overruns available space for 'key'
+     *                      OR if a string in 'values' contains RESERVED_CHAR.
+     *         exception on operation failure.
+     */
+	void append(
+	    const std::string &key,
+	    const std::vector<std::string> &values);
 
-        /**
-         * EFFECTS: Pre-allocates space for values associated with a key.
-         * THROWS: key_error if key.size() > get_max_key_size().
-         *         key_error if key was already insert()ed or reserve()d.
-         *         mode_error if the VectorDiskHash was opened from existing
-         *           files.
-         *         internal_error on failure.
-         * NOTE:
-         * All values associated with a particular key must be
-         * insert()ed consecutively. Alternatively, space can
-         * be reserve()d for those values, and they can be inserted
-         * as long as space remains.
-         * 
-         * `space` should be as large as the sum of .size()s of all values
-         * associated with `key` plus one byte for each value (storage
-         * overhead).
-         */
-        void reserve(const std::string& key, const size_t space);
+	/**
+     * EFFECTS: Equivalent to append(key, std::vector<std::string>({values}))
+     */
+	void append(const std::string &key, const std::string &values);
 
-        /**
-         * EFFECTS: Associates a value with a key.
-         * THROWS: key_error if key.size() exceeds get_max_key_size().
-         *         key_error if key is reserved and value.size()+1 exceeds the
-         *           amount of reserved space.
-         *         mode_error if the VectorDiskHash was opened from existing
-         *           files.
-         *         internal_error on failure.
-         */
-		void insert(const std::string& key, const std::string& value);
+	/**
+     * EFFECTS: Returns options used to create the VectorDiskHash.
+     */
+	Options get_options() const;
 
-        /**
-         * EFFECTS: Retrieves all values associated with a key. 
-         * THROWS: key_error if key does not exist.
-         *         internal_error on failure.
-        */
-		std::vector<std::string> get(const std::string& key);
+    /**
+     * EFFECTS: Returns whether reserve(key...) or append(key...) were called.
+     */
+    bool is_member(const std::string& key) const;
 
-        /**
-         * EFFECTS: Randomly samples n_random values associated with a key
-         * (with replacement).
-         * THROWS: key_error if key does not exist.
-         *         internal_error on failure.
-        */
-        std::vector<std::string> get_random(const std::string& key, size_t n_random);
+    /**
+     * EFFECTS: Retrieves values associated with 'key'.
+     * THROWS: vdh_key_error if !is_member(key).
+     *         exception on operation failure.
+     */
+	std::vector<std::string> lookup(const std::string &key);
 
-        std::string get_name();
+    /**
+     * EFFECTS: Randomly samples 'k' values associated with 'key'
+     *          (with replacement).
+     * THROWS: vdh_key_error if !is_member(key).
+     *         exception on operation failure.
+     */
+	std::vector<std::string> lookup_sample(const std::string &key, size_t k);
 
-        size_t get_max_key_size();
+	/**
+     * EFFECTS: Allocates fixed amount of storage for values associated with
+     *          'key'.
+     * THROWS: vdh_mode_error if VectorDiskHash is read-only.
+     *         vdh_key_error if key.size() > get_options().max_key_size
+     *                    OR if is_member(key).
+     *         exception on operation failure.
+     */
+	void reserve(const std::string &key, size_t bytes_to_reserve);
 
-    private:
-        inline static const char KEY_DELIMITER = '\n';
-        inline static const char VALUE_DELIMITER = '\t';
-        inline static const std::string DATA_EXTENSION = ".vdhdat";
-        inline static const std::string DHT_EXTENSION = ".vdhdht";
+   private:
+	const char KEY_DELIMITER = '\n';
+	const char VALUE_DELIMITER = '\t';
 
-        struct Location {
-            std::streampos start;
-            std::streampos write_location;
-            size_t reserve_remaining;
-        };
+    /* Stores location of a serialized vector of strings in 'file'. */
+	struct Location {
+		std::streampos start;
+		std::streampos write_location;
+		size_t bytes_reserved;
+	};
 
-        std::shared_ptr<dht::DiskHash<Location>> hashtable;
-        std::fstream file;
-        std::string end_of_file_key;
-        std::string name;
-        const bool read_only;
-        size_t max_key_size;
+	/* Stores options used to create the SDH. */
+	Options options;
 
-        size_t read_max_key_size();
-        void write_max_key_size(const size_t max_key_size);
-        void read_until_key_delimiter(std::string& buff);
+	/* Stores serialized values. */
+	std::fstream file;
+
+	/* Maps keys to the locations of serialized values in 'file'. */
+	std::shared_ptr<dht::DiskHash<Location>> table;
+	
+	/* Stores the newest non-reserve()d key. */
+	std::string eof_key;
+
+	bool open_file(const std::string &file_path, std::_Ios_Openmode mask);
+	bool open_table(
+	    const std::string &open_table,
+	    const size_t max_key_size,
+	    dht::OpenMode mask);
+	std::string read_serialized_vector(const std::string& key);
 };
 
 #endif

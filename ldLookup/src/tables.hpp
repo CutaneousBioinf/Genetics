@@ -1,208 +1,107 @@
-#ifndef LDLOOKUP_TABLES_HPP
-#define LDLOOKUP_TABLES_HPP
+#ifndef _LDLOOKUP_TABLES_HPP_
+#define _LDLOOKUP_TABLES_HPP_
 
-#include <map> // std::map
-#include <memory> // std::shared_ptr
-#include <string> // std::string
-#include <vector> // std::vector
+#include <stddef.h>  // size_t
 
+#include <memory>  // std::shared_ptr
+
+#include "parse_variants.hpp"
+#include "stratify.hpp"
 #include "vdh.hpp"
 
-// Character used to separate fields of composite keys
-const char FIELD_SEPARATOR = ' ';
-
-/* Convert a number of LD surrogates to a string */
-std::string serialize_surrogates(size_t surrogate_count);
-
-/* Convert a minor allele frequency to a string */
-std::string serialize_maf(double maf);
-
-/* Recover a number of LD surrogates from a serialize_ld string */
-size_t deserialize_surrogates(const std::string& surrogate_count);
-
-/* Recover a minor allele frequency from a serialize_maf string */
-double deserialize_maf(const std::string& maf);
+/**
+ * TODO: Document!
+ */
+class LDTable : public VectorDiskHash {
+   public:
+	/**
+	 * TODO: Document!
+	 */
+	LDTable(const Options& opts);
+};
 
 /**
- * Allows fuzzy lookup of SNPs by MAF and number of LD surrogates.
- * 
- * BinsTable is initialized with two sets of bin boundaries. One
- * is used to cluster SNPs by their MAF. The other is used to cluster
- * SNPs by the number of SNPs they are in LD with. Then, by querying
- * the table for an MAF or number of LD surrogates, all SNPs with
- * both a similar MAF and a similar number of LD surrogates can be found.
- **/
-class BinsTable {
-    public:
-        /**
-         * Opens an existing BinsTable.
-         * 
-         * Parameters:
-         *  dir - Path to directory containing a BinsTable.
-        **/
-        BinsTable(const std::string& dir="");
+ * TODO: Document!
+ */
+class StrataTable {
+   public:
+	using Stratum = std::string;
 
-        /**
-         * Creates a new BinsTable.
-         * 
-         * Parameters:
-         *  surrogate_quantiles - Lower bounds for LD surrogate bins
-         *  maf_quantiles - Lower bounds for MAF bins
-         *  dir - Path to directory containing a BinsTable.
-        **/
-        BinsTable(
-            const std::vector<size_t>& surrogate_quantiles,
-            const std::vector<double>& maf_quantiles,
-            const std::string& dir=""
-        );
+	/**
+	 * TODO: Document!
+	 */
+	StrataTable(
+	    const std::string& file_path,
+        const std::string& table_path,
+	    Histogram<size_t> n_surrogates_strata_in,
+	    Histogram<double> maf_strata_in);
 
-        /**
-         * Pre-allocates space for values in a bin.
-         * 
-         * Reserve slightly more space than is necessary--one byte per value,
-         * to be exact.
-         * 
-         * Parameters:
-         *  bin - String from BinsTable.bin()
-         *  space - Space to reserve, in bytes, for bin
-        **/
-        void reserve(
-            const std::string& bin,
-            size_t space
-        );
+    /**
+	 * TODO: Document!
+	 */
+	StrataTable(
+	    const std::string& file_path,
+        const std::string& table_path);
 
-        /**
-         * Associates an SNP with a bin.
-         * 
-         * Parameters:
-         *  bin - String from BinsTable.bin()
-         *  snp - SNP to place in bin
-        **/
-        void insert(
-            const std::string& bin,
-            const std::string& snp
-        );
+	/**
+	 * TODO: Document!
+	 */
+	void append(const IndexVariantSummary& summary);
 
-        /**
-         * Retrives all SNPs associated with a bin.
-         * 
-         * Parameters:
-         *  bin - String from BinsTable.bin()
-        **/
-        std::vector<std::string> get(
-            const std::string& bin
-        );
+	/**
+	 * TODO: Document!
+	 */
+	Stratum get_stratum(const IndexVariantSummary& summary);
 
-        /**
-         * Samples a random set of SNPs associated with a bin (with replacement).
-         * 
-         * Parameters:
-         *  bin - String from BinsTable.bin()
-         *  n_random - Number of SNPs to randomly choose from the bin.
-        **/
-        std::vector<std::string> get_random(
-            const std::string& bin,
-            size_t n_random=1
-        );
+	/**
+	 * TODO: Document!
+	 */
+	std::vector<std::string> lookup(const IndexVariantSummary& summary);
 
-        /* Translates a number of LD surrogates and an MAF into a valid key. */ 
-        std::string bin(size_t surrogate_count, double maf);
+	/**
+	 * TODO: Document!
+	 */
+	std::vector<std::string> lookup_sample(
+		const IndexVariantSummary& summary,
+		const size_t k);
 
-    private:
-        // Maximum length of serialize_surrogate_count + FIELD_SEPARATOR
-        // + serialize_maf
-        static const size_t MAX_KEY_SIZE = 64;
-        // Special keys used to store bin cutpoints
-        inline static const std::string LD_BINS_KEY = "__RESERVED_KEY_LD_BINS__";
-        inline static const std::string MAF_BINS_KEY = "__RESERVED_KEY_MAF_BINS__";
+	/**
+	 * TODO: Document!
+	 */
+	void reserve(const Histogram<Stratum>& strata_sizes);
 
-        inline static const std::string NAME = "bins_table";
+   private:
+	const size_t MAX_KEY_SIZE = 64;
+	const std::string N_SURROGATES_KEY = "__N_SURROGATES_KEY__";
+	const std::string MAF_KEY = "__MAF_KEY__";
 
-        std::shared_ptr<VectorDiskHash> table;
-        std::vector<size_t> surrogate_quantiles;
-        std::vector<double> maf_quantiles;
+	Histogram<size_t> n_surrogates_strata;
+	Histogram<double> maf_strata;
+	std::shared_ptr<VectorDiskHash> table;
 };
 
-/* Allows lookup of MAF and number of LD surrogates by SNP */
-class SNPTable {
-    public:
-        /**
-         * Opens an existing SNPTable.
-         * 
-         * Parameters:
-         *  dir - Path to directory containing an SNPTable.
-        **/
-        SNPTable(const std::string& dir="");
+/**
+ * TODO: Document!
+ */
+class SummaryTable {
+   public:
+	/**
+	 * TODO: Document!
+	 */
+	SummaryTable(const Options& opts);
 
-        /**
-         * Creates a new SNPTable.
-         * 
-         * Parameters:
-         *  max_key_size - Maximum length of an SNP key
-         *  dir - Path to directory in which to create an SNPTable.
-        **/
-        SNPTable(const size_t max_key_size, const std::string& dir="");
+	/**
+	 * TODO: Document!
+	 */
+	void append(const IndexVariantSummary& summary);
 
-        /* Associates an SNP with an MAF and number of LD surrogates. */
-        void insert(
-            const std::string& snp,
-            const size_t surrogate_count,
-            const double maf
-        );
+	/**
+	 * TODO: Document!
+	 */
+	IndexVariantSummary lookup(const std::string& index_variant_id);
 
-        /* Retrieves number of LD surrogates and MAF using an SNP */
-        std::pair<size_t, double> get(const std::string& snp);
-
-    private:
-        std::shared_ptr<VectorDiskHash> table;
-        inline static const std::string NAME = "snp_table";
-};
-
-/* Allows lookup of markers in LD with a particular SNP */
-class LDTable {
-    public:
-        /**
-         * Opens an existing LDTable.
-         * 
-         * Parameters:
-         *  dir - Path to directory containing an LDTable.
-        **/
-        LDTable(const std::string& dir="");
-
-        /**
-         * Creates a new LDTable.
-         * 
-         * Parameters:
-         *  max_key_size - Maximum length of an SNP key
-         *  dir - Path to directory in which to create an LDTable.
-        **/
-        LDTable(const size_t max_key_size, const std::string& dir="");
-
-        /**
-         * Associate an SNP with a genetic marker.
-         * 
-         * ld_snps associated with a particular snp must be inserted
-         * consecutively. That is, do this:
-         *  insert(A, B)
-         *  insert(A, C)
-         *  insert(D, E)
-         * and not this:
-         *  insert(A, B)
-         *  insert(D, E)
-         *  insert(A, C)
-         * 
-         * Parameters:
-         *  snp - Index SNP ID
-         *  ld_snp - SNP ID of marker in LD with index SNP
-        **/
-        void insert(const std::string& snp, const std::string& ld_snp);
-
-        /* Retrieve all SNPs previously associated with an index SNP */
-        std::vector<std::string> get(const std::string& snp);
-
-    private:
-        std::shared_ptr<VectorDiskHash> table;
-        inline static const std::string NAME = "ld_table";
+   private:
+	std::shared_ptr<VectorDiskHash> table;
 };
 
 #endif

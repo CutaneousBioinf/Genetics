@@ -1,14 +1,7 @@
-# Special ignores
-ldLookup
-tests
-*.vdhdht
-*.vdhdat
-data/*
-data/**
-.vscode/*
-.vscode/**
+# Custom Rules
+exclude/**
 
-## Default GitHub C++ .gitignore
+# GitHub Default C++ .gitignore
 # Prerequisites
 *.d
 
@@ -41,4 +34,3 @@ data/**
 *.exe
 *.out
 *.app
-

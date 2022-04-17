@@ -1,546 +1,691 @@
+#include <algorithm>   // std::find
+#include <filesystem>  // std::filesystem::create_directory
+#include <iostream>    // std::cout
+#include <fstream>     // std::ifstream
+#include <memory>      // std::shared_ptr
+#include <utility>     // std::pair
+#include <string>
+#include <vector>
+
+#include <stddef.h>    // size_t
+
 #include "CLI11.hpp"
-#include "histogram.hpp"
-#include "ld_parse.hpp"
+#include "parse_variants.hpp"
+#include "stratify.hpp"
 #include "tables.hpp"
 
+using std::string;
+using std::vector;
+
 /*************************************************/
-/***             Utility Functions             ***/
+/*************************************************/
+/***                 Constants                 ***/
+/*************************************************/
 /*************************************************/
 
-template <typename Key>
-void print_key_and_values(
-    const Key key,
-    const std::vector<std::string>& values
-) {
-    for (const auto& val : values) {
-        std:: cout << key << '\t' << val << '\n';
-    }
-}
+const string LD_TABLE_FILE_PATH = "ld.vdhdat";
+const string LD_TABLE_TABLE_PATH = "ld.vdhdht";
+const string STRATA_TABLE_FILE_PATH = "strata.vdhdat";
+const string STRATA_TABLE_TABLE_PATH = "strata.vdhdht";
+const string SUMMARY_TABLE_FILE_PATH = "summary.vdhdat";
+const string SUMMARY_TABLE_TABLE_PATH = "summary.vdhdht";
 
-/**
- * Extracts valid lines of linkage disequilibrium data from a file.
- * 
- * Parameters:
- *  source_path - File to read from
- *  reqs - Requirements for parsing and validating LD data.
- *  F1 - Function to be called when new LD data is parsed. F1 is
- *      passed an LDPair object representing the new data.
- *  F2 - Function to be called for each unique index SNP. F2 is passed
- *      the index SNP ID, the index SNP's MAF, and the number of SNPs
- *      in LD with the index SNP.
-**/
-template <typename F1, typename F2>
-void iterate_genetic_data(
-    const std::string& source_path,
-    LDPairRequirements reqs,
-    F1 on_data,
-    F2 on_new_snp
-) {
-    std::fstream data(source_path, std::ios_base::in);
-    if (!data) {
-        throw std::runtime_error("Failed to open '" + source_path + "'");
-    }
+/*************************************************/
+/*************************************************/
+/***                  Options                  ***/
+/*************************************************/
+/*************************************************/
 
-    std::string line;
-    size_t ld_pairs(0);
-    LDPair last_new_snp{ "", "", 0, 0 };
-    LDPair curr{ "", "", 0 ,0 };
-
-    while (getline(data, line)) {
-        if (!parse_ld_pair(line, curr, reqs)) {
-            std::cout << "Did not parse malformed line " << line << '\n';
-            continue;
-        } else if (!validate_ld_pair(curr, reqs)) {
-            continue;
-        }
-
-        if (last_new_snp.index_snp.compare(curr.index_snp)) {
-            if (ld_pairs) {
-                on_new_snp(
-                    last_new_snp.index_snp,
-                    last_new_snp.index_maf,
-                    ld_pairs
-                );
-            }
-            last_new_snp = curr;
-            ld_pairs = 0;
-        }
-
-        on_data(curr);
-        ld_pairs++;
-    }
-
-    if (ld_pairs) {
-        on_new_snp(
-            last_new_snp.index_snp,
-            last_new_snp.index_maf,
-            ld_pairs
-        );
-    }
-}
-
-/**
- * Creates all of ldLookup's data tables. Requires that the tables
- * do not already exist.
- * 
- * Parameters:
- *  source_path - File containing linkage disequilibrium data.
- *  dir - Path to directory in which to create tables
- *  reqs - Requirements for parsing and validating LD data.
- *  n_ld_bins - Approximate number of BinsTable divisions by number
- *      of LD surrogates.
- *  n_maf_bins - Approximate number of BinsTable divisions by MAF.
-**/  
-void create_tables(
-    const std::string& source_path,
-    const std::string& dir,
-    LDPairRequirements reqs,
-    size_t n_ld_bins,
-    size_t n_maf_bins
-) {
-    // First Pass: Populate LDTable and SNPTable.
-    // Also, gather distribution data for MAF/LD.
-    LDTable ldt(reqs.max_index_snp_size, dir);
-    SNPTable snpt(reqs.max_index_snp_size, dir);
-
-    std::map<size_t, size_t> ld_counts_hist;
-    std::map<double, size_t> maf_counts_hist;
-
-    auto first_pass_on_data([&ldt] (const LDPair& ld_pair) {
-        ldt.insert(ld_pair.index_snp, ld_pair.ld_snp);
-    });
-
-    auto first_pass_on_new_snp(
-        [&snpt, &ld_counts_hist, &maf_counts_hist] (
-        const std::string& index_snp_id, const double maf, size_t n_ld_pairs
-    ) {
-        snpt.insert(index_snp_id, n_ld_pairs, maf);
-        ld_counts_hist.emplace(n_ld_pairs, 0).first->second++;
-        maf_counts_hist.emplace(maf, 0).first->second++;
-    });
-
-    iterate_genetic_data(
-        source_path,
-        reqs,
-        first_pass_on_data,
-        first_pass_on_new_snp
-    );
-
-    // Determine bin cutpoints.
-    auto ld_quantiles(get_map_keys(
-        bin_histogram(ld_counts_hist, n_ld_bins)
-    ));
-
-    auto maf_quantiles(get_map_keys(
-        bin_histogram(maf_counts_hist, n_maf_bins)
-    ));
-
-    // Initialize BinsTable.
-    BinsTable bt(ld_quantiles, maf_quantiles, dir);
-
-    // Second Pass: Determine exact bin sizes.
-    std::map<std::string, size_t> bin_sizes;
-
-    auto second_pass_on_data([] (const LDPair& data) {});
-
-    auto second_pass_on_new_snp([&bt, &bin_sizes] (
-        const std::string& index_snp_id, const double maf, size_t n_ld_pairs
-    ) {
-        auto key(bt.bin(n_ld_pairs, maf));
-        auto size_added(index_snp_id.size() + 1);
-        bin_sizes.emplace(key, 0).first->second += size_added;
-    });
-
-    iterate_genetic_data(
-        source_path,
-        reqs,
-        second_pass_on_data,
-        second_pass_on_new_snp
-    );
-
-    // Reserve space in BinsTable.
-    for (const auto& bin_and_size : bin_sizes) {
-        bt.reserve(bin_and_size.first, bin_and_size.second);
-    }
-
-    // Third Pass: Populate BinsTable.
-    auto third_pass_on_data([] (const LDPair& data) {});
-
-    auto third_pass_on_new_snp([&bt, &bin_sizes] (
-        const std::string& index_snp_id, const double maf, size_t n_ld_pairs
-    ) {
-        bt.insert(bt.bin(n_ld_pairs, maf), index_snp_id);
-    });
-
-    iterate_genetic_data(
-        source_path,
-        reqs,
-        third_pass_on_data,
-        third_pass_on_new_snp
-    );
-}
-
-/** Extracts lines from a file with a callback for each line.
- * 
- * path - File to iterate through
- * extra_lines - Additional lines to call the callback on.
- * on_line - Callback function that takes a string parameter.
- * 
- */
-template<typename F>
-void iterate_lines(
-    const std::string& path,
-    const std::vector<std::string>& extra_lines,
-    F on_line
-) {
-    if (path.size()) {
-        std::fstream f(path, std::ios_base::in);
-        if (!f) {
-        throw std::runtime_error("Failed to open '" + path + "'");
-    }
-
-        std::string line;
-        while (getline(f, line)) {
-            on_line(line);
-        }
-    }
-
-    for (auto key : extra_lines) {
-        on_line(key);
-    }
-}
-
-
-/************************************************/
-/***          Command Line Interface          ***/
-/************************************************/
-
-struct SubcommandOptsCreate {
-    std::string dir;
-    std::string data_path;
-    LDPairRequirements reqs{ ' ', 3, 7, 4, 9, 200, 0.0 };
-    size_t n_ld_bins = 15;
-    size_t n_maf_bins = 15;
+struct SubcommandOptsSetup {
+    string dir;
+    string src;
+    char delimiter = ' ';
+    std::string index_variant_id_column = "SNP_A";
+    std::string ld_variant_id_column = "SNP_B";
+    std::string index_variant_maf_column = "MAF_A";
+    std::string r2_column = "R2";
+    double r2_threshold_for_ld = 0.0;
+    size_t index_variants_per_ld_bin = 0;
+    size_t n_ld_bins = 0;
+    size_t index_variants_per_maf_bin = 0;
+    size_t n_maf_bins = 0;
 };
 
-struct SubcommandOptsGetLD {
-    std::string dir;
-    std::string path_to_markers = "";
-    std::vector<std::string> cli_markers = std::vector<std::string>();
+struct SubcommandOptsGetVariantsInLDWith {
+    string dir;
+    string key_variants_file = "";
+    vector<string> key_variants = vector<string>();
 };
 
-struct SubcommandOptsGetSimilarByValue {
-    std::string dir;
+struct SubcommandOptsGetVariantsSimilarTo {
+    string dir;
+    string key_variants_file = "";
+    vector<string> key_variants = vector<string>();
+};
+
+struct SubcommandOptsGetVariantsWithStatsLike {
+    string dir;
     double target_maf;
     size_t target_surrogate_count;
 };
 
-struct SubcommandOptsGetSimilarBySNP {
-    std::string dir;
-    std::string path_to_markers = "";
-    std::vector<std::string> cli_markers = std::vector<std::string>();
+struct SubcommandOptsGetVariantStatistics {
+    string dir;
+    string key_variants_file = "";
+    vector<string> key_variants = vector<string>();
 };
 
-struct SubcommandOptsDistribute {
-    std::string dir;
-    std::string path_to_markers = "";
-    std::vector<std::string> cli_markers = std::vector<std::string>();
-    size_t n_distributions = 1;
+struct SubcommandOptsSample {
+    string dir;
+    string key_variants_file = "";
+    vector<string> key_variants = vector<string>();
+    size_t n_samples = 1;
 };
 
-void subcommand_create(CLI::App& app) {
-    auto opts(std::make_shared<SubcommandOptsCreate>());
-    auto create(app.add_subcommand("create", "Create a new dataset from LD data"));
+/*************************************************/
+/*************************************************/
+/***                   Types                   ***/
+/*************************************************/
+/*************************************************/
 
-    create->add_option(
+struct SetupFirstIterationResults {
+    Histogram<size_t> n_surrogates_hist;
+    Histogram<double> maf_hist;
+    size_t max_index_variant_size;
+};
+
+struct Tables {
+    std::shared_ptr<LDTable> ld_t;
+    std::shared_ptr<StrataTable> strata_t;
+    std::shared_ptr<SummaryTable> summary_t;
+};
+
+/*************************************************/
+/*************************************************/
+/***                  Helpers                  ***/
+/*************************************************/
+/*************************************************/
+
+void on_invalid_cb(const string& line) {
+    std::cout << "Ignoring Invalid Line: " << line << std::endl;
+}
+
+Tables open_tables(const std::string& dir_str) {
+    std::filesystem::path dir(dir_str);
+
+	Tables ret;
+	ret.ld_t.reset(new LDTable(
+	    {dir / LD_TABLE_FILE_PATH,
+	     dir / LD_TABLE_TABLE_PATH,
+	     0,
+	     false}));
+	ret.strata_t.reset(new StrataTable(
+	    dir / STRATA_TABLE_FILE_PATH,
+	    dir / STRATA_TABLE_TABLE_PATH));
+	ret.summary_t.reset(new SummaryTable(
+	    {dir / SUMMARY_TABLE_FILE_PATH,
+	     dir / SUMMARY_TABLE_TABLE_PATH,
+	     0,
+	     false}));
+
+	return ret;
+}
+
+void print_to_columns(
+    const string& first_col,
+    const vector<string>& second_col) {
+    for (const string& s : second_col) {
+        std::cout << first_col << '\t' << s << '\n';
+    }
+}
+
+string read_first_line(string path) {
+    // Open the source input file.
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        throw std::runtime_error("Failed to open '" + path + "'");
+    }
+
+    // Read the header row of file.
+    string header;
+    std::getline(file, header);
+
+    return header;
+}
+
+/*************************************************/
+/*************************************************/
+/***                   Logic                   ***/
+/*************************************************/
+/*************************************************/
+
+LDPairParser create_parser(std::shared_ptr<SubcommandOptsSetup> opts) {
+    // Read column names from the header row.
+    string header = read_first_line(opts->src);
+    vector<string> col_names = split(header, opts->delimiter);
+
+    // This is the parser we will return.
+    LDPairParser parser;
+    parser.delimiter = opts->delimiter;
+    parser.r2_threshold_for_ld = opts->r2_threshold_for_ld;
+
+    // Convert column strings to column indices.
+    vector<string> str_args = {
+        opts->index_variant_id_column,
+        opts->index_variant_maf_column,
+        opts->ld_variant_id_column,
+        opts->r2_column
+    };
+
+    vector<size_t*> col_idx_fields = {
+        &parser.index_variant_id_column,
+        &parser.index_variant_maf_column,
+        &parser.ld_variant_id_column,
+        &parser.r2_column
+    };
+
+    for (size_t i = 0; i < str_args.size(); i++) {
+        string arg = str_args[i];
+        try {
+            // Treat the user argument as a number representing
+            // a column index.
+            *col_idx_fields[i] = std::stoi(arg);
+        } catch (std::invalid_argument& ignore) {
+            // On failure, treat the user argument as the name
+            // of a column, and determine its index.
+            auto it = std::find(col_names.begin(), col_names.end(), arg);
+            if (it == col_names.end()) {
+                throw std::invalid_argument("Invalid Column: " + arg);
+            }
+            *col_idx_fields[i] = it - col_names.begin() + 1;
+        }
+    }
+
+    return parser;  
+}
+
+SetupFirstIterationResults do_setup_first_iteration(
+    const LDPairParser& parser,
+    std::shared_ptr<SubcommandOptsSetup> opts
+) {
+    SetupFirstIterationResults results;
+    results.max_index_variant_size = 0;
+
+	auto it1_on_ld_pair_cb = [](const LDPair& pair) {
+        (void)pair;
+    };
+
+	auto it1_on_new_index_variant_cb = [&](const IndexVariantSummary& summary) {
+        // Update maximum variant size.
+        if (summary.variant_id.size() > results.max_index_variant_size) {
+            results.max_index_variant_size = summary.variant_id.size();
+        }
+
+        // Update distribution information for StrataTable.
+        results.maf_hist.increase_count(summary.maf);
+        results.n_surrogates_hist.increase_count(summary.n_surrogates);
+    };
+
+	iterate_ld_data(
+	    opts->src,
+	    parser,
+	    it1_on_ld_pair_cb,
+	    it1_on_new_index_variant_cb,
+	    on_invalid_cb);
+
+    // Determine strata for MAF.
+    size_t n_maf_bins = opts->n_maf_bins;
+    if (opts->index_variants_per_maf_bin != 0) {
+        auto total = results.maf_hist.total_count();
+		n_maf_bins = total / opts->index_variants_per_maf_bin;
+	}
+    results.maf_hist = results.maf_hist.stratify(n_maf_bins);
+
+    // Determine strata for number of LD surrogates.
+    size_t n_ld_bins = opts->n_ld_bins;
+    if (opts->index_variants_per_ld_bin != 0) {
+        auto total = results.n_surrogates_hist.total_count();
+        n_ld_bins = total / opts->index_variants_per_ld_bin;
+    }
+    results.n_surrogates_hist = results.n_surrogates_hist.stratify(n_ld_bins);
+
+    return results;
+}
+
+void do_setup(std::shared_ptr<SubcommandOptsSetup> opts) {
+    // Create an string-to-LDPair parser based on opts.
+    LDPairParser parser = create_parser(opts);
+
+    // Do first iteration.
+    SetupFirstIterationResults results = do_setup_first_iteration(parser, opts);
+
+    // Create the output directory.
+    std::filesystem::path dir(opts->dir);
+    if (std::filesystem::exists(dir)) {
+        throw std::runtime_error("Directory Already Exists: " + opts->dir);
+    }
+    std::filesystem::create_directory(dir);
+
+    // Initialize LDTable, StrataTable, and SummaryTable.
+    Options ld_table_options{
+        dir / LD_TABLE_FILE_PATH,
+        dir / LD_TABLE_TABLE_PATH,
+        results.max_index_variant_size,
+        true };
+    
+    Options summary_table_options{
+        dir / SUMMARY_TABLE_FILE_PATH,
+        dir / SUMMARY_TABLE_TABLE_PATH,
+        results.max_index_variant_size,
+        true };
+    
+    LDTable ld_t(ld_table_options);
+    StrataTable strata_t(
+        dir / STRATA_TABLE_FILE_PATH,
+        dir / STRATA_TABLE_TABLE_PATH,
+        results.n_surrogates_hist,
+        results.maf_hist);
+    SummaryTable summary_t(summary_table_options);
+
+    // Second Iteration Over Data:
+    // - Determine space needed for strata.
+    Histogram<StrataTable::Stratum> strata_sizes;
+	auto it2_on_ld_pair_cb = [](const LDPair& pair) {
+        (void)pair;
+    };
+
+	auto it2_on_new_index_variant_cb = [&](const IndexVariantSummary& summary) {
+        StrataTable::Stratum stratum = strata_t.get_stratum(summary);
+        size_t variant_size = summary.variant_id.size()+1;
+        strata_sizes.increase_count(stratum, variant_size);
+    };
+
+    iterate_ld_data(
+	    opts->src,
+	    parser,
+	    it2_on_ld_pair_cb,
+	    it2_on_new_index_variant_cb,
+	    on_invalid_cb);
+    
+    // Reserve strata on-disk.
+    strata_t.reserve(strata_sizes);
+
+    // Third Iteration Over Data:
+    // - Populate LDTable, StatsTable, and StrataTable.
+    auto it3_on_ld_pair_cb = [&](const LDPair& pair) {
+        ld_t.append(pair.index_variant_id, pair.ld_variant_id);
+	};
+
+	auto it3_on_new_index_variant_cb = [&](const IndexVariantSummary& summary) {
+        strata_t.append(summary);
+        summary_t.append(summary);
+    };
+
+    iterate_ld_data(
+	    opts->src,
+	    parser,
+	    it3_on_ld_pair_cb,
+	    it3_on_new_index_variant_cb,
+	    on_invalid_cb);
+}
+
+void do_get_variants_in_ld_with(
+    std::shared_ptr<SubcommandOptsGetVariantsInLDWith> opts) {
+    
+    Tables tables = open_tables(opts->dir);
+    std::cout << "Variant ID\tVariant ID of LD Surrogate\n";
+    auto on_variant = [&](string variant) {
+        print_to_columns(variant, tables.ld_t->lookup(variant));
+    };
+
+    iterate_variants(
+        opts->key_variants_file,
+        opts->key_variants,
+        on_variant);
+}
+
+void do_get_variants_similar_to(
+    std::shared_ptr<SubcommandOptsGetVariantsSimilarTo> opts) {
+    
+    Tables tables = open_tables(opts->dir);
+    std::cout << "Variant ID\tVariant ID of Similar Variant\n";
+    auto on_variant = [&](string variant) {
+        IndexVariantSummary stats = tables.summary_t->lookup(variant);
+        print_to_columns(variant, tables.strata_t->lookup(stats));
+    };
+
+    iterate_variants(
+        opts->key_variants_file,
+        opts->key_variants,
+        on_variant);
+}
+
+void do_get_variants_with_stats_like(
+    std::shared_ptr<SubcommandOptsGetVariantsWithStatsLike> opts) {
+    
+    Tables tables = open_tables(opts->dir);
+    IndexVariantSummary stats;
+    stats.n_surrogates = opts->target_surrogate_count;
+    stats.maf = opts->target_maf;
+    
+    std::cout << "Target MAF\tTarget # LD Surrogates\tVariant ID\n";
+    for (auto &s : tables.strata_t->lookup(stats)) {
+        std::cout << opts->target_maf << '\t';
+        std::cout << opts->target_surrogate_count << '\t';
+        std::cout << s << '\n';
+    }
+}
+
+void do_get_variant_statistics(
+    std::shared_ptr<SubcommandOptsGetVariantStatistics> opts) {
+    
+    Tables tables = open_tables(opts->dir);
+    std::cout << "Variant ID\t# LD Surrogates\tMAF\n";
+    auto on_variant = [&](string variant) {
+        IndexVariantSummary stats = tables.summary_t->lookup(variant);
+        std::cout << variant << '\t' << stats.n_surrogates << '\t';
+        std::cout << stats.maf << '\n';
+    };
+
+    iterate_variants(
+        opts->key_variants_file,
+        opts->key_variants,
+        on_variant);
+}
+
+void do_sample(std::shared_ptr<SubcommandOptsSample> opts) {
+    Tables tables = open_tables(opts->dir);
+    std::cout << "Sample #\tVariant ID\tVariant ID of Similar Variant\n";
+    auto on_variant = [&](string variant) {
+        IndexVariantSummary stats = tables.summary_t->lookup(variant);
+        auto sampled = tables.strata_t->lookup_sample(stats, opts->n_samples);
+        for (size_t i = 0; i < sampled.size(); i++) {
+            std::cout << i+1 << '\t' << variant << '\t' << sampled.at(i) << '\n';
+        }
+    };
+
+    iterate_variants(
+        opts->key_variants_file,
+        opts->key_variants,
+        on_variant);
+}
+
+/*************************************************/
+/*************************************************/
+/***                    CLI                    ***/
+/*************************************************/
+/*************************************************/
+
+void subcommand_setup(CLI::App& app) {
+    auto opts(std::make_shared<SubcommandOptsSetup>());
+    auto cmd(app.add_subcommand("setup", "Create a new lookup table"));
+
+    cmd->add_option(
         "dir,--dir",
         opts->dir,
-        "Specifies a directory that will contain the created dataset"
-    )->required();
+        "Directory in which to store the lookup table"
+    )->check(CLI::NonexistentPath)->required();
 
-    create->add_option(
-        "path_to_data,-p,--path-to-data",
-        opts->data_path, 
-    "File containing LD data"
-    )->required();
+    cmd->add_option(
+        "src,-s,--src",
+        opts->src,
+        "File from which to read LD data"
+    )->check(CLI::ExistingFile)->required();
 
-    create->add_option(
-        "-t,--threshold",
-        opts->reqs.min_r_squared,
-        "LD score (as measured by R^2) below which a marker will be ignored"
-    );
-
-    create->add_option(
-        "-I,--index-snp-id-column",
-        opts->reqs.index_snp_column,
-        "Index to column of data containing index SNP IDs"
-    );
-
-    create->add_option(
-        "-M,--maf-col",
-        opts->reqs.index_maf_column,
-        "Index to column of data containing MAFs for index SNPs"
-    );
-
-    create->add_option(
-        "-L,--ld-snp-id-column",
-        opts->reqs.ld_snp_column,
-        "Index to column of data containing IDs for SNPs in LD with the index SNP"
-    );
-
-    create->add_option(
-        "-R,--r2-index",
-        opts->reqs.r_squared_column,
-        "Index to column of data containing r-squared values"
-    );
-
-    create->add_option(
+    cmd->add_option(
         "-d,--delimiter",
-        opts->reqs.column_separator,
-        "Character used to separate columns of data"
+        opts->delimiter,
+        "Character that separates columns of LD data"
     );
 
-    create->add_option(
-        "-k,--key-size-limit", 
-        opts->reqs.max_index_snp_size, 
-        "Maximum index SNP ID length in bytes"
+    cmd->add_option(
+        "-I,--index-id-column",
+        opts->index_variant_id_column,
+        "Column of LD data containing index variant IDs"
     );
 
-    create->add_option(
-        "-l,--ld-bin-count",
+    cmd->add_option(
+        "-L,--ld-id-column",
+        opts->ld_variant_id_column,
+        "Column of LD data containing IDs for variants in LD with the index variant"
+    );
+
+    cmd->add_option(
+        "-M,--index-maf-column",
+        opts->index_variant_maf_column,
+        "Column of LD data containing MAFs of index variants"
+    );
+
+    cmd->add_option(
+        "-R,--r2-column",
+        opts->r2_column,
+        "Column of LD data containing r-squared values"
+    );
+
+    cmd->add_option(
+        "-t,--r2-threshold-for-ld",
+        opts->r2_threshold_for_ld,
+        "Minimum r-squared value for a variant pair to be considered 'in LD'"
+    )->check(CLI::Range(0.0, 1.0));
+
+    // LD Bin Group
+    auto ld_group = cmd->add_option_group("ld_bins");
+    ld_group->add_option(
+        "--index-variants-per-ld-bin",
+        opts->index_variants_per_ld_bin,
+        "Approximate size of each strata when index variants are stratified by number of LD surrogates"
+    )->check(CLI::PositiveNumber);
+
+    ld_group->add_option(
+        "--n-ld-bins",
         opts->n_ld_bins,
-        "Approximate number of groupings for index SNPs by number of LD surrogates"
-    );
+        "Approximate number of strata when index variants are stratified by number of LD surrogates"
+    )->check(CLI::PositiveNumber);
 
-    create->add_option(
-        "-m,--maf-bin-count",
+    ld_group->require_option(1);
+    // End LD Bin Group
+
+    // MAF Bin Group
+    auto maf_group = cmd->add_option_group("maf_bins");
+    maf_group->add_option(
+        "--index-variants-per-maf-bin",
+        opts->index_variants_per_maf_bin,
+        "Approximate size of each strata when index variants are stratified by MAF"
+    )->check(CLI::PositiveNumber);
+
+    maf_group->add_option(
+        "--n-maf-bins",
         opts->n_maf_bins,
-        "Approximate number of groupings for index SNPs by MAF"
-    );
+        "Approximate number of strata when index variants are stratified by MAF"
+    )->check(CLI::PositiveNumber);
 
-    create->callback([opts]() {
-        // These parameters are passed as/default to one-indexed columns.
-        // They need to be zero-indexed.
-        opts->reqs.index_snp_column--;
-        opts->reqs.ld_snp_column--;
-        opts->reqs.index_maf_column--;
-        opts->reqs.r_squared_column--;
-        create_tables(
-            opts->data_path,
-            opts->dir,
-            opts->reqs,
-            opts->n_ld_bins,
-            opts->n_maf_bins
-        );
+    maf_group->require_option(1);
+    // End MAF Bin Group
+
+    cmd->callback([opts]() {
+        do_setup(opts);
     });
 }
 
-void subcommand_get_ld(CLI::App& app) {
-    auto opts(std::make_shared<SubcommandOptsGetLD>());
-    auto get_ld(app.add_subcommand(
-        "get_ld", "Get markers in LD with a particular index marker"
+void subcommand_get_variants_in_ld_with(CLI::App& app) {
+    auto opts(std::make_shared<SubcommandOptsGetVariantsInLDWith>());
+    auto cmd(app.add_subcommand(
+        "get_variants_in_ld_with", 
+        "Get variants in LD with specified key variants"
     ));
 
-    get_ld->add_option(
+    cmd->add_option(
         "dir,--dir",
         opts->dir,
-        "Specifies the location of the dataset to operate on (see 'ldLookup create')"
-    )->required();
+        "Directory where lookup table is stored"
+    )->check(CLI::ExistingDirectory)->required();
 
-    get_ld->add_option(
-        "path_to_markers,-p,--path-to-markers",
-        opts->path_to_markers,
-        "File containing newline-separated index SNP IDs"
+    cmd->add_option(
+        "key_variants_file,-f,--key-variants-file",
+        opts->key_variants_file,
+        "File containing newline-separated index variant IDs"
+    )->check(CLI::ExistingFile);
+
+    cmd->add_option(
+        "key_variants,-k,--key-variants",
+        opts->key_variants,
+        "Space-separated index variant IDs"
     );
 
-    get_ld->add_option(
-        "markers,-m,--markers",
-        opts->cli_markers,
-        "Additional space-separated SNP IDs"
-    );
-
-    get_ld->callback([opts]() {
-        LDTable ldt(opts->dir);
-        auto do_get_ld([&ldt] (const std::string& snp) {
-            std::vector<std::string> values = ldt.get(snp);
-            print_key_and_values(snp, values);
-        });
-        iterate_lines(opts->path_to_markers, opts->cli_markers, do_get_ld);
+    cmd->callback([opts]() {
+        do_get_variants_in_ld_with(opts);
     });
 }
 
-void subcommand_get_similar_by_value(CLI::App& app) {
-    auto opts(std::make_shared<SubcommandOptsGetSimilarByValue>());
-    auto similar_by_value(app.add_subcommand(
-        "similar_by_value",
-        "Retrieve markers with MAF and number of LD surrogates near target values"
+void subcommand_get_variants_similar_to(CLI::App& app) {
+    auto opts(std::make_shared<SubcommandOptsGetVariantsSimilarTo>());
+    auto cmd(app.add_subcommand(
+        "get_variants_similar_to",
+        "Get variants with MAF and number of LD surrogates similar to those of specified key variants"
     ));
 
-    similar_by_value->add_option(
+    cmd->add_option(
         "dir,--dir",
         opts->dir,
-        "Specifies the location of the dataset to operate on (see 'ldLookup create')"
-    )->required();
+        "Directory where lookup table is stored"
+    )->check(CLI::ExistingDirectory)->required();
 
-    similar_by_value->add_option(
+    cmd->add_option(
+        "key_variants_file,-f,--key-variants-file",
+        opts->key_variants_file,
+        "File containing newline-separated index variant IDs"
+    )->check(CLI::ExistingFile);
+
+    cmd->add_option(
+        "key_variants,-k,--key-variants",
+        opts->key_variants,
+        "Space-separated index variant IDs"
+    );
+
+    cmd->callback([opts]() {
+        do_get_variants_similar_to(opts);
+    });
+}
+
+void subcommand_get_variants_with_stats_like(CLI::App& app) {
+    auto opts(std::make_shared<SubcommandOptsGetVariantsWithStatsLike>());
+    auto cmd(app.add_subcommand(
+        "get_variants_with_stats_like",
+        "Get variants with MAF and number of LD surrogates near specified targets"
+    ));
+
+    cmd->add_option(
+        "dir,--dir",
+        opts->dir,
+        "Directory where lookup table is stored"
+    )->check(CLI::ExistingDirectory)->required();
+
+    cmd->add_option(
         "target_maf,-m,--target-maf",
         opts->target_maf, 
         "Target MAF value"
     )->required();
 
-    similar_by_value->add_option(
-        "target_surrogates,-s,--target-surrogates",
+    cmd->add_option(
+        "target_n_ld_surrogates,-n,--target-n-ld-surrogates",
         opts->target_surrogate_count,
         "Target number of LD surrogates"
     )->required();
 
-    similar_by_value->callback([opts]() {
-        BinsTable bt(opts->dir);
-        SNPTable snpt(opts->dir);
-        auto values(bt.get(
-            bt.bin(opts->target_surrogate_count, opts->target_maf)
-        ));
-
-        std::string key(serialize_maf(opts->target_maf) 
-                        + " " 
-                        + serialize_surrogates(opts->target_surrogate_count));
-        print_key_and_values(key, values);
+    cmd->callback([opts]() {
+        do_get_variants_with_stats_like(opts);
     });
 }
 
-void subcommand_get_similar_by_snp(CLI::App& app) {
-    auto opts(std::make_shared<SubcommandOptsGetSimilarBySNP>());
-    auto similar_by_snp(app.add_subcommand(
-        "similar_by_snp",
-        "Retrieve markers with MAF and number of LD surrogates similar to a key marker"
+void subcommand_get_variant_statistics(CLI::App& app) {
+    auto opts(std::make_shared<SubcommandOptsGetVariantStatistics>());
+    auto cmd(app.add_subcommand(
+        "get_variant_statistics",
+        "Get MAF and number of LD surrogates of specified key variants"
     ));
 
-    similar_by_snp->add_option(
+    cmd->add_option(
         "dir,--dir",
         opts->dir,
-        "Specifies the location of the dataset to operate on (see 'ldLookup create')"
-    )->required();
-
-    similar_by_snp->add_option(
-        "path_to_markers,-p,--path-to-markers",
-        opts->path_to_markers,
-        "File containing newline-separated index SNP IDs"
+        "Directory where lookup table is stored"
     );
 
-    similar_by_snp->add_option(
-        "markers,-m,--markers",
-        opts->cli_markers,
-        "Additional space-separated SNP IDs"
+    cmd->add_option(
+        "key_variants_file,-f,--key-variants-file",
+        opts->key_variants_file,
+        "File containing newline-separated index variant IDs"
+    )->check(CLI::ExistingFile);
+
+    cmd->add_option(
+        "key_variants,-k,--key-variants",
+        opts->key_variants,
+        "Space-separated index variant IDs"
     );
 
-    similar_by_snp->callback([opts]() {
-        BinsTable bt(opts->dir);
-        SNPTable snpt(opts->dir);
-
-        auto do_get_similar([&bt, &snpt] (const std::string& snp) {
-            auto maf_and_surrogates(snpt.get(snp));
-            auto values(bt.get(bt.bin(
-                maf_and_surrogates.first,
-                maf_and_surrogates.second
-            )));
-            print_key_and_values(snp, values);
-        });
-
-        iterate_lines(
-            opts->path_to_markers,
-            opts->cli_markers,
-            do_get_similar
-        );
+    cmd->callback([opts]() {
+        do_get_variant_statistics(opts);
     });
 }
 
-void subcommand_distribute(CLI::App& app) {
-    auto opts(std::make_shared<SubcommandOptsDistribute>());
-    auto distribute(app.add_subcommand(
-        "distribute",
-        "Generate distributions for hypothesis testing"
+void subcommand_sample(CLI::App& app) {
+    auto opts(std::make_shared<SubcommandOptsSample>());
+    auto cmd(app.add_subcommand(
+        "sample",
+        "Randomly sample variants with MAF and number of LD surrogates similar to those of specified key variants"
     ));
 
-    distribute->add_option(
+    cmd->add_option(
         "dir,--dir",
         opts->dir,
-        "Specifies the location of the dataset to operate on (see 'ldLookup create')"
-    )->required();
+        "Directory where lookup table is stored"
+    )->check(CLI::ExistingDirectory)->required();
 
-    distribute->add_option(
-        "path_to_markers,-p,--path-to-markers",
-        opts->path_to_markers,
-        "File containing newline-separated index SNP IDs"
+    cmd->add_option(
+        "key_variants_file,-f,--key-variants-file",
+        opts->key_variants_file,
+        "File containing newline-separated index variant IDs"
+    )->check(CLI::ExistingFile);
+
+    cmd->add_option(
+        "key_variants,-k,--key-variants",
+        opts->key_variants,
+        "Space-separated index variant IDs"
     );
 
-    distribute->add_option(
-        "markers,-m,--markers",
-        opts->cli_markers,
-        "Additional space-separated SNP IDs"
+    cmd->add_option(
+        "-n,--n-samples",
+        opts->n_samples,
+        "Number of samples to take for each variant"
     );
 
-    distribute->add_option(
-        "-d,--distributions",
-        opts->n_distributions,
-        "Number of distributions to generate"
-    );
-
-    distribute->callback([opts]() {
-        BinsTable bt(opts->dir);
-        SNPTable snpt(opts->dir);
-        std::map<size_t, std::vector<std::string>> dists;
-
-        for (size_t i = 0; i < opts->n_distributions; i++) {
-            dists.emplace(i, std::vector<std::string>());
-        }
-
-        auto do_distribute([&] (const std::string& snp) {
-            auto maf_and_surrogates = snpt.get(snp);
-            auto values(bt.get_random(
-                bt.bin(
-                    maf_and_surrogates.first,
-                    maf_and_surrogates.second
-                ),
-                opts->n_distributions
-            ));
-
-            for (size_t i = 0; i < values.size(); i++) {
-                dists[i].push_back(values.at(i));
-            }
-        });
-
-        iterate_lines(
-            opts->path_to_markers,
-            opts->cli_markers,
-            do_distribute
-        );
-
-        for (auto const& number_and_dist : dists) {
-            print_key_and_values(
-                "Distribution #" + std::to_string(number_and_dist.first+1),
-                number_and_dist.second
-            );
-        }
+    cmd->callback([opts]() {
+        do_sample(opts);
     });
 }
+
+/************************************************/
+/************************************************/
+/***                   MAIN                   ***/
+/************************************************/
+/************************************************/
 
 int main(int argc, char** argv) {
-    std::string description("ldLookup - lookup and analysis of linkage disequilibrium (LD) between genetic variants");
-    CLI::App app{description};
+    CLI::App app("ldLookup - lookup and analysis of linkage disequilibrium (LD) between genetic variants");
     app.option_defaults()->always_capture_default();
     app.require_subcommand(1);
 
-    subcommand_create(app);
-    subcommand_get_ld(app);
-    subcommand_get_similar_by_value(app);
-    subcommand_get_similar_by_snp(app);
-    subcommand_distribute(app);
+    subcommand_setup(app);
+    subcommand_get_variants_in_ld_with(app);
+    subcommand_get_variants_similar_to(app);
+    subcommand_get_variants_with_stats_like(app);
+    subcommand_get_variant_statistics(app);
+    subcommand_sample(app);
 
     // Application Logic
     try {
         CLI11_PARSE(app, argc, argv);
     } catch (std::exception &e) {
-        std::cout << "ERROR: " << e.what() << "\n";
+        std::cout << "ERROR:\n" << e.what() << "\n";
         return 1;
     }
 
