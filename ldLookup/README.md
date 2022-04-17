@@ -169,9 +169,9 @@ Options:
 #### sample
 Given a set of input variants, ``sample`` does this:
 - For each variant ID _i_ in the input set:
--- Run ``get_variants_similar_to i``. That is, get the set of variants with MAF and number of LD surrogates similar to _i_.
--- Randomly select ``--n-samples`` variants (with replacement) from the set of similar variants.
--- Display the randomly selected variants.
+  - Run ``get_variants_similar_to i``. That is, get the set of variants with MAF and number of LD surrogates similar to _i_.
+  - Randomly select ``--n-samples`` variants (with replacement) from the set of similar variants.
+  - Display the randomly selected variants.
 
 ``sample`` has the follwoing help text:
 ```
