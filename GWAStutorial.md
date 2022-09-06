@@ -1,6 +1,6 @@
 ## Tutorial for performing GWAS, according to requirements from CHOP
 
-Please be aware that the following code has not been testing. If you have any questions or concerns, please do not hesitate to contact Matthew Patrick.
+Please be aware that the following code has not been tested. If you have any questions or concerns, please do not hesitate to contact Matthew Patrick.
 
 First, we set up the path to the phenotype and genotype data:
 ```
