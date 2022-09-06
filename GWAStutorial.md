@@ -46,9 +46,12 @@ awk 'NR==FNR{id[$2]=$1;next} ($1 in id){print id[$1]"\t"$0}' \
   - <(pheno) | cut -f1,3- | awk 'BEGIN{print "FID\tIID\tage\tsex\tdis"} {print "0\t"$0}' > dis.pheno
 ```
 
+### Extracting genetic information
+
 We extract the genotyped data for analysis:
 ```
-plink2 --bfile $genoDir/directly-typed/MGI.Freeze4.DIRECTLY.TYPED.hg38.bim --const-fid --keep dis.pheno --make-bed --out typed --maf 0.01 --geno 0.02 --mind 0.02
+plink2 --bfile $genoDir/directly-typed/MGI.Freeze4.DIRECTLY.TYPED.hg38.bim --const-fid \
+--keep dis.pheno --make-bed --out typed --maf 0.01 --geno 0.02 --mind 0.02
 ```
 
 PCA is performed to check whether the genetic ancestry for any patients differs substantially from the self-identified ancestry:
@@ -68,10 +71,12 @@ for chr in {1..22}; do
 done
 ```
 
+### Association analysis
+
 Using plink, we perform association analysis:
 ```
 for chr in {1..22}; do
-  plink2 --pfile chr$chr --pheno dis.phe --pheno-name dis --covar dis.covar --glm hide-covar \
+  plink2 --pfile chr$chr --pheno dis.phe --pheno-name dis --covar dis.covar --glm firth-fallback hide-covar \
     cols=+beta --threads 10 --memory 1024 --out dis
 done
 ```
